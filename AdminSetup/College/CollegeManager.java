@@ -151,9 +151,9 @@ public class CollegeManager {
         System.out.println("Loading colleges from database...");
 
         // Try both possible column name formats (college_id vs CollegeID)
-        String collegeQuery = "SELECT * FROM dbo.College";
-        String programQuery = "SELECT * FROM dbo.Program WHERE CollegeID = ?";
-        String streamQuery = "SELECT StreamName FROM dbo.Stream WHERE ProgramID = ?";
+        String collegeQuery = "SELECT college_id, college_name FROM dbo.College";
+        String programQuery = "SELECT ProgramID, ProgramName, Seats, Eligibility, Fee FROM dbo.Program WHERE College_ID = ?";
+        String streamQuery = "SELECT s.name FROM dbo.ProgramStream ps JOIN dbo.Stream s ON ps.stream_id = s.stream_id WHERE ps.programid = ?";
 
         try (Statement stmt = connection.createStatement();
              ResultSet collegeRs = stmt.executeQuery(collegeQuery)) {
@@ -163,17 +163,8 @@ public class CollegeManager {
                 collegeCount++;
                 
                 // Try both column name formats
-                int collegeId;
-                String collegeName;
-                
-                try {
-                    collegeId = collegeRs.getInt("college_id");
-                    collegeName = collegeRs.getString("college_name");
-                } catch (SQLException e) {
-                    // Try alternate column names
-                    collegeId = collegeRs.getInt("CollegeID");
-                    collegeName = collegeRs.getString("CollegeName");
-                }
+                int collegeId = collegeRs.getInt("college_id");
+                String collegeName = collegeRs.getString("college_name");
                 
                 System.out.println("Loading college: " + collegeName + " (ID: " + collegeId + ")");
                 

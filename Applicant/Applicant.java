@@ -10,7 +10,14 @@ public class Applicant extends Users {
 
     private ArrayList<ApplicationFormData> submittedApplications;
     private FeeStatus feeStatus = FeeStatus.UNPAID;
+    private int applicantId;
 
+
+    // Default constructor for DB hydration
+    public Applicant() {
+        super("", "", "", "", "", "", null, null, "");
+        this.submittedApplications = new ArrayList<>();
+    }
 
     public Applicant(String firstName, String lastName, String email, String password,
                      String securityAnswer, String cnic, LocalDate dob,
@@ -36,6 +43,14 @@ public class Applicant extends Users {
 
     public FeeStatus getFeeStatus() {
         return feeStatus;
+    }
+
+    public int getApplicantID() {
+        return applicantId;
+    }
+
+    public void setApplicantID(int applicantId) {
+        this.applicantId = applicantId;
     }
 }
 

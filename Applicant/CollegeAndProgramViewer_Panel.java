@@ -2,8 +2,9 @@ package Applicant;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
-import java.io.*;
+import java.sql.*;
 import java.util.*;
+import Database.DBConnection;
 
 public class CollegeAndProgramViewer_Panel extends JPanel {
     private JTextField searchField;
@@ -58,67 +59,78 @@ public class CollegeAndProgramViewer_Panel extends JPanel {
     private void loadCollegeData(String query) {
         resultPanel.removeAll();
 
-        try (BufferedReader br = new BufferedReader(new FileReader("colleges.txt"))) {
-            String line;
-            String currentCollege = null;
-            JPanel collegePanel = null;
+        String sql = """
+            SELECT c.college_id, c.college_name,
+                   p.ProgramID, p.ProgramName, p.Seats, p.Eligibility, p.Fee,
+                   STRING_AGG(s.name, ', ') AS streams
+            FROM dbo.College c
+            LEFT JOIN dbo.Program p ON p.College_ID = c.college_id
+            LEFT JOIN dbo.ProgramStream ps ON ps.programid = p.ProgramID
+            LEFT JOIN dbo.Stream s ON s.stream_id = ps.stream_id
+            GROUP BY c.college_id, c.college_name, p.ProgramID, p.ProgramName, p.Seats, p.Eligibility, p.Fee
+            ORDER BY c.college_name, p.ProgramName
+        """;
 
-            while ((line = br.readLine()) != null) {
-                if (line.startsWith("College:")) {
-                    currentCollege = line.substring(8).trim();
-                    collegePanel = createCollegePanel(currentCollege);
-                } else if (line.startsWith("Program:")) {
-                    String[] parts = line.substring(8).split(",");
-                    String programName = parts[0].trim();
-                    int seats = Integer.parseInt(parts[1].trim());
-                    int eligibility = Integer.parseInt(parts[2].trim());
-                    double fee = Double.parseDouble(parts[3].trim());
+        Map<Integer, JPanel> collegePanels = new LinkedHashMap<>();
 
-                    ArrayList<String> streams = new ArrayList<>();
-                    // Read all streams after Program
-                    br.mark(1000); // Mark current line in case we need to reset
-                    while ((line = br.readLine()) != null && line.startsWith("Stream:")) {
-                        streams.add(line.substring(7).trim());
-                        br.mark(1000);
-                    }
-                    br.reset(); // Rewind to last non-stream line
+        try (Connection con = DBConnection.getConnection();
+             Statement stmt = con.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
 
-                    // Check if matches search
-                    boolean matchesQuery = query.isEmpty()
-                            || currentCollege.toLowerCase().contains(query)
-                            || programName.toLowerCase().contains(query)
-                            || String.valueOf(seats).contains(query)
-                            || String.valueOf(eligibility).contains(query)
-                            || String.valueOf(fee).contains(query)
-                            || streams.stream().anyMatch(s -> s.toLowerCase().contains(query));
+            while (rs.next()) {
+                int collegeId = rs.getInt("college_id");
+                String collegeName = rs.getString("college_name");
 
-                    if (matchesQuery && collegePanel != null) {
-                        JPanel programPanel = new JPanel();
-                        programPanel.setLayout(new GridLayout(5, 1));
-                        programPanel.setBackground(new Color(255, 250, 240));
-                        programPanel.setBorder(BorderFactory.createTitledBorder(programName));
+                JPanel collegePanel = collegePanels.computeIfAbsent(collegeId, id -> createCollegePanel(collegeName));
 
-                        programPanel.add(new JLabel("Program Name: " + programName));
-                        programPanel.add(new JLabel("Seats: " + seats));
-                        programPanel.add(new JLabel("Eligibility: " + eligibility + "%"));
-                        programPanel.add(new JLabel("Fee: PKR " + String.format("%,.2f", fee)+ " per semester"));
-                        programPanel.add(new JLabel("Eligible Streams: " + String.join(", ", streams)));
-
-                        collegePanel.add(programPanel);
-                    }
-
+                int programId = rs.getInt("ProgramID");
+                String programName = rs.getString("ProgramName");
+                if (programName == null) {
+                    continue; // No program for this college yet
                 }
-                if (collegePanel != null && !Arrays.asList(resultPanel.getComponents()).contains(collegePanel)) {
-                    resultPanel.add(collegePanel);
+                int seats = rs.getInt("Seats");
+                int eligibility = rs.getInt("Eligibility");
+                double fee = rs.getDouble("Fee");
+                String streams = rs.getString("streams");
+
+                // Search filter matching similar to file approach
+                boolean matchesQuery = query.isEmpty()
+                        || collegeName.toLowerCase().contains(query)
+                        || programName.toLowerCase().contains(query)
+                        || String.valueOf(seats).contains(query)
+                        || String.valueOf(eligibility).contains(query)
+                        || String.valueOf(fee).contains(query)
+                        || (streams != null && streams.toLowerCase().contains(query));
+
+                if (!matchesQuery) {
+                    continue;
                 }
+
+                JPanel programPanel = new JPanel();
+                programPanel.setLayout(new GridLayout(5, 1));
+                programPanel.setBackground(new Color(255, 250, 240));
+                programPanel.setBorder(BorderFactory.createTitledBorder(programName));
+
+                programPanel.add(new JLabel("Program Name: " + programName));
+                programPanel.add(new JLabel("Seats: " + seats));
+                programPanel.add(new JLabel("Eligibility: " + eligibility + "%"));
+                programPanel.add(new JLabel("Fee: PKR " + String.format("%,.2f", fee) + " per semester"));
+                programPanel.add(new JLabel("Eligible Streams: " + (streams == null ? "-" : streams)));
+
+                collegePanel.add(programPanel);
+            }
+
+            // Add panels to result
+            for (JPanel panel : collegePanels.values()) {
+                resultPanel.add(panel);
             }
 
             if (resultPanel.getComponentCount() == 0) {
                 resultPanel.add(new JLabel(" No results found for: " + query));
             }
 
-        } catch (IOException e) {
-            resultPanel.add(new JLabel("⚠ Error reading college.txt!"));
+        } catch (SQLException e) {
+            resultPanel.add(new JLabel("⚠ Error loading data from database!"));
             e.printStackTrace();
         }
 

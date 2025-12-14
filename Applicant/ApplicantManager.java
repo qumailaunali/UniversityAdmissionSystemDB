@@ -1,89 +1,155 @@
 package Applicant;
 
+import Database.DBConnection;
+import Authentication.Gender;
 
-
-import java.io.*;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Scanner;
 
 public class ApplicantManager {
 
-    private static final String APPLICATION_FILE = "all_applications.txt";
+    // Insert a new application into the database
+    public static int saveApplication(ApplicationFormData app) {
+        String sql = """
+            INSERT INTO dbo.ApplicationForm (
+                ApplicantID, AdminID, email, first_name, last_name, date_of_birth, gender,
+                twelfth_percentage, twelfth_year, twelfth_stream,
+                university_name, test_schedule, test_score, status, fee_status,
+                is_submitted, is_scholarship_submitted, programid
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """;
 
-    public static void saveToFile(ApplicationFormData app) {
-        try (FileWriter writer = new FileWriter(APPLICATION_FILE, true)) {
-            String line = String.join(",",
-                    app.getApplicationId() != null ? app.getApplicationId() : "",
-                    app.getUsers() != null && app.getUsers().getFirstName() != null ? app.getUsers().getFirstName() : "Unknown",
-                    app.getYear12() != null ? app.getYear12() : "",
-                    app.getPercent12() != null ? app.getPercent12() : "",
-                    app.getStream12() != null ? app.getStream12() : "",
-                    app.getSelectedProgram() != null ? app.getSelectedProgram() : "N/A",
-                    app.getSelectedCollege() != null ? app.getSelectedCollege() : "N/A",
-                    app.getUsers() != null && app.getUsers().getEmail() != null ? app.getUsers().getEmail() : "n/a",
-                    app.getStatus() != null ? app.getStatus().name() : "UNKNOWN",
-                    app.getTestSchedule() != null ? app.getTestSchedule() : "N/A",
-                    app.getTestScore() != null ? app.getTestScore() : "null",
-                    app.getFeeStatus() != null ? app.getFeeStatus().name() : "PENDING"
-            );
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
 
-            writer.write(line + System.lineSeparator());
-        } catch (IOException e) {
+            if (app.getUsers() != null) {
+                ps.setInt(1, app.getUsers().getApplicantID());
+            } else {
+                ps.setNull(1, java.sql.Types.INTEGER);
+            }
+            ps.setObject(2, (Object) null); // AdminID optional
+            ps.setString(3, app.getEmail());
+            ps.setString(4, app.getUsers().getFirstName());
+            ps.setString(5, app.getUsers().getLastName());
+            ps.setDate(6, app.getUsers().getDateOfBirth() != null ? java.sql.Date.valueOf(app.getUsers().getDateOfBirth()) : null);
+            ps.setString(7, app.getUsers().getGender() != null ? app.getUsers().getGender().name() : null);
+
+            ps.setBigDecimal(8, app.getPercent12() != null && !app.getPercent12().isEmpty() ? new java.math.BigDecimal(app.getPercent12()) : null);
+            ps.setObject(9, app.getYear12() != null && !app.getYear12().isEmpty() ? Integer.parseInt(app.getYear12()) : null, java.sql.Types.INTEGER);
+            ps.setString(10, app.getStream12());
+
+            ps.setString(11, app.getSelectedCollege()); // university_name
+            ps.setDate(12, null); // test_schedule not set yet
+            ps.setObject(13, app.getTestScore() != null && !app.getTestScore().isEmpty() ? Integer.parseInt(app.getTestScore()) : null, java.sql.Types.INTEGER);
+            ps.setString(14, app.getStatus() != null ? app.getStatus().name() : Status.SUBMITTED.name());
+            ps.setString(15, app.getFeeStatus() != null ? app.getFeeStatus().name() : FeeStatus.UNPAID.name());
+            ps.setBoolean(16, app.isSubmitted());
+            ps.setBoolean(17, app.isScholarshipSubmitted());
+
+            // Need programid: resolve from selected program + college
+            Integer programId = null;
+            if (app.getSelectedProgram() != null && app.getSelectedCollege() != null) {
+                programId = findProgramId(app.getSelectedProgram(), app.getSelectedCollege());
+            }
+            if (programId == null) {
+                ps.setNull(18, java.sql.Types.INTEGER);
+            } else {
+                ps.setInt(18, programId);
+            }
+
+            ps.executeUpdate();
+            try (ResultSet rs = ps.getGeneratedKeys()) {
+                if (rs.next()) {
+                    return rs.getInt(1);
+                }
+            }
+        } catch (SQLException e) {
             e.printStackTrace();
         }
+        return -1;
     }
 
 
     public boolean hasAppliedBefore(ApplicationFormData newApp) {
-        ArrayList<ApplicationFormData> existingApplications = loadAllApplications();
+        String sql = """
+            SELECT 1
+            FROM dbo.ApplicationForm
+            WHERE ApplicantID = ? AND programid = ?
+        """;
 
-        for (ApplicationFormData app : existingApplications) {
-            boolean sameUser = app.getUsers().equals(newApp.getUsers());
-            boolean sameProgram = app.getSelectedProgram().equalsIgnoreCase(newApp.getSelectedProgram());
-            boolean sameCollege = app.getSelectedCollege().equalsIgnoreCase(newApp.getSelectedCollege());
-
-            if (sameUser && (sameProgram || sameCollege)) {
-                return true;
-            }
+        Integer programId = null;
+        if (newApp.getSelectedProgram() != null && newApp.getSelectedCollege() != null) {
+            programId = findProgramId(newApp.getSelectedProgram(), newApp.getSelectedCollege());
+        }
+        if (programId == null) {
+            return false;
         }
 
-        return false;
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            if (newApp.getUsers() != null) {
+                ps.setInt(1, newApp.getUsers().getApplicantID());
+            } else {
+                ps.setNull(1, java.sql.Types.INTEGER);
+            }
+            ps.setInt(2, programId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 
 
     public static ArrayList<ApplicationFormData> loadAllApplications() {
         ArrayList<ApplicationFormData> applications = new ArrayList<>();
-        File file = new File(APPLICATION_FILE);
+        String sql = """
+            SELECT application_form_id, ApplicantID, email, first_name, last_name, date_of_birth, gender,
+                   twelfth_percentage, twelfth_year, twelfth_stream, university_name, test_schedule,
+                   test_score, status, fee_status, is_submitted, is_scholarship_submitted, programid
+            FROM dbo.ApplicationForm
+        """;
 
-        if (!file.exists()) return applications;
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
 
-        try (Scanner scanner = new Scanner(file)) {
-            while (scanner.hasNextLine()) {
-                String line = scanner.nextLine();
-                String[] parts = line.split(",");
+            while (rs.next()) {
+                String applicationId = String.valueOf(rs.getInt("application_form_id"));
+                String year12 = rs.getObject("twelfth_year") != null ? rs.getObject("twelfth_year").toString() : null;
+                String percent12 = rs.getBigDecimal("twelfth_percentage") != null ? rs.getBigDecimal("twelfth_percentage").toPlainString() : null;
+                String stream12 = rs.getString("twelfth_stream");
+                String selectedProgramName = null; // not stored; can be resolved via join if needed
+                String selectedCollegeName = rs.getString("university_name");
+                String email = rs.getString("email");
+                String statusStr = rs.getString("status");
+                String testSchedule = rs.getDate("test_schedule") != null ? rs.getDate("test_schedule").toString() : null;
+                String testScore = rs.getObject("test_score") != null ? rs.getObject("test_score").toString() : null;
+                String feeStatusStr = rs.getString("fee_status");
 
-                if (parts.length < 11) {
-                    continue;
+                Applicant user = new Applicant();
+                user.setApplicantID(rs.getInt("ApplicantID"));
+                user.setEmail(email);
+                user.setFirstName(rs.getString("first_name"));
+                user.setLastName(rs.getString("last_name"));
+                if (rs.getDate("date_of_birth") != null) {
+                    user.setDateOfBirth(rs.getDate("date_of_birth").toLocalDate());
+                }
+                // gender as string
+                if (rs.getString("gender") != null) {
+                    try {
+                        user.setGender(Gender.valueOf(rs.getString("gender")));
+                    } catch (IllegalArgumentException ignored) {}
                 }
 
-                String applicationID = parts[0];
-                String fullName = parts[1];
-                String year12 = parts[2];
-                String percent12 = parts[3];
-                String stream12 = parts[4];
-                String selectedProgramName = parts[5];
-                String selectedCollegeName = parts[6];
-                String email = parts[7];
-                String statusStr = parts[8];
-                String testSchedule = parts[9];
-                String testScore = parts[10];
-                String feeStatusStr = parts[11];
-
-                Applicant user = null;
-
                 ApplicationFormData app = new ApplicationFormData(
-                        applicationID,
+                        applicationId,
                         user,
                         year12, percent12, stream12,
                         selectedProgramName,
@@ -95,21 +161,24 @@ public class ApplicantManager {
                 app.setTestScore(testScore);
 
                 try {
-                    app.setStatus(Status.valueOf(statusStr.toUpperCase()));
+                    app.setStatus(Status.valueOf(statusStr != null ? statusStr.toUpperCase() : Status.SUBMITTED.name()));
                 } catch (IllegalArgumentException | NullPointerException e) {
                     app.setStatus(Status.SUBMITTED);
                 }
 
                 try {
-                    app.setFeeStatus(FeeStatus.valueOf(feeStatusStr.toUpperCase()));
+                    app.setFeeStatus(FeeStatus.valueOf(feeStatusStr != null ? feeStatusStr.toUpperCase() : FeeStatus.UNPAID.name()));
                 } catch (IllegalArgumentException | NullPointerException e) {
                     app.setFeeStatus(FeeStatus.UNPAID);
                 }
 
+                app.setSubmitted(rs.getBoolean("is_submitted"));
+                app.setScholarshipSubmitted(rs.getBoolean("is_scholarship_submitted"));
+
                 applications.add(app);
             }
-        } catch (IOException e) {
-            System.out.println("Error reading application file: " + e.getMessage());
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
 
         return applications;
@@ -117,125 +186,235 @@ public class ApplicantManager {
 
 
     public static ArrayList<ApplicationFormData> getApplicationsByUserEmail(String email) {
-        ArrayList<ApplicationFormData> allApps = loadAllApplications();
-        ArrayList<ApplicationFormData> userApps = new ArrayList<>();
+        ArrayList<ApplicationFormData> apps = new ArrayList<>();
+        String sql = """
+            SELECT application_form_id, ApplicantID, email, first_name, last_name, date_of_birth, gender,
+                   twelfth_percentage, twelfth_year, twelfth_stream, university_name, test_schedule,
+                   test_score, status, fee_status, is_submitted, is_scholarship_submitted, programid
+            FROM dbo.ApplicationForm
+            WHERE email = ?
+        """;
 
-        for (ApplicationFormData app : allApps) {
-            if (app.getEmail() != null && app.getEmail().equalsIgnoreCase(email)) {
-                userApps.add(app);
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, email);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String applicationId = String.valueOf(rs.getInt("application_form_id"));
+                    String year12 = rs.getObject("twelfth_year") != null ? rs.getObject("twelfth_year").toString() : null;
+                    String percent12 = rs.getBigDecimal("twelfth_percentage") != null ? rs.getBigDecimal("twelfth_percentage").toPlainString() : null;
+                    String stream12 = rs.getString("twelfth_stream");
+                    String selectedProgramName = null;
+                    String selectedCollegeName = rs.getString("university_name");
+                    String statusStr = rs.getString("status");
+                    String testSchedule = rs.getDate("test_schedule") != null ? rs.getDate("test_schedule").toString() : null;
+                    String testScore = rs.getObject("test_score") != null ? rs.getObject("test_score").toString() : null;
+                    String feeStatusStr = rs.getString("fee_status");
+
+                    Applicant user = new Applicant();
+                    user.setApplicantID(rs.getInt("ApplicantID"));
+                    user.setEmail(email);
+                    user.setFirstName(rs.getString("first_name"));
+                    user.setLastName(rs.getString("last_name"));
+                    if (rs.getDate("date_of_birth") != null) {
+                        user.setDateOfBirth(rs.getDate("date_of_birth").toLocalDate());
+                    }
+                    if (rs.getString("gender") != null) {
+                        try {
+                            user.setGender(Gender.valueOf(rs.getString("gender")));
+                        } catch (IllegalArgumentException ignored) {}
+                    }
+
+                    ApplicationFormData app = new ApplicationFormData(
+                            applicationId,
+                            user,
+                            year12, percent12, stream12,
+                            selectedProgramName,
+                            selectedCollegeName,
+                            email
+                    );
+
+                    app.setTestSchedule(testSchedule);
+                    app.setTestScore(testScore);
+                    try {
+                        app.setStatus(Status.valueOf(statusStr != null ? statusStr.toUpperCase() : Status.SUBMITTED.name()));
+                    } catch (IllegalArgumentException | NullPointerException e) {
+                        app.setStatus(Status.SUBMITTED);
+                    }
+                    try {
+                        app.setFeeStatus(FeeStatus.valueOf(feeStatusStr != null ? feeStatusStr.toUpperCase() : FeeStatus.UNPAID.name()));
+                    } catch (IllegalArgumentException | NullPointerException e) {
+                        app.setFeeStatus(FeeStatus.UNPAID);
+                    }
+
+                    app.setSubmitted(rs.getBoolean("is_submitted"));
+                    app.setScholarshipSubmitted(rs.getBoolean("is_scholarship_submitted"));
+
+                    apps.add(app);
+                }
             }
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
-
-        return userApps;
+        return apps;
     }
     public static ApplicationFormData getApplicationByAppId(String id) {
-        ArrayList<ApplicationFormData> allApps = loadAllApplications();
+        String sql = """
+            SELECT application_form_id, ApplicantID, email, first_name, last_name, date_of_birth, gender,
+                   twelfth_percentage, twelfth_year, twelfth_stream, university_name, test_schedule,
+                   test_score, status, fee_status, is_submitted, is_scholarship_submitted, programid
+            FROM dbo.ApplicationForm WHERE application_form_id = ?
+        """;
 
-        for (ApplicationFormData app : allApps) {
-            if (app.getApplicationId() != null && app.getApplicationId().equalsIgnoreCase(id)) {
-                return app;
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setInt(1, Integer.parseInt(id));
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    String applicationId = String.valueOf(rs.getInt("application_form_id"));
+                    String year12 = rs.getObject("twelfth_year") != null ? rs.getObject("twelfth_year").toString() : null;
+                    String percent12 = rs.getBigDecimal("twelfth_percentage") != null ? rs.getBigDecimal("twelfth_percentage").toPlainString() : null;
+                    String stream12 = rs.getString("twelfth_stream");
+                    String selectedProgramName = null;
+                    String selectedCollegeName = rs.getString("university_name");
+                    String email = rs.getString("email");
+                    String statusStr = rs.getString("status");
+                    String testSchedule = rs.getDate("test_schedule") != null ? rs.getDate("test_schedule").toString() : null;
+                    String testScore = rs.getObject("test_score") != null ? rs.getObject("test_score").toString() : null;
+                    String feeStatusStr = rs.getString("fee_status");
+
+                    Applicant user = new Applicant();
+                    user.setApplicantID(rs.getInt("ApplicantID"));
+                    user.setEmail(email);
+                    user.setFirstName(rs.getString("first_name"));
+                    user.setLastName(rs.getString("last_name"));
+                    if (rs.getDate("date_of_birth") != null) {
+                        user.setDateOfBirth(rs.getDate("date_of_birth").toLocalDate());
+                    }
+                    if (rs.getString("gender") != null) {
+                        try {
+                            user.setGender(Gender.valueOf(rs.getString("gender")));
+                        } catch (IllegalArgumentException ignored) {}
+                    }
+
+                    ApplicationFormData app = new ApplicationFormData(
+                            applicationId,
+                            user,
+                            year12, percent12, stream12,
+                            selectedProgramName,
+                            selectedCollegeName,
+                            email
+                    );
+
+                    app.setTestSchedule(testSchedule);
+                    app.setTestScore(testScore);
+                    try {
+                        app.setStatus(Status.valueOf(statusStr != null ? statusStr.toUpperCase() : Status.SUBMITTED.name()));
+                    } catch (IllegalArgumentException | NullPointerException e) {
+                        app.setStatus(Status.SUBMITTED);
+                    }
+                    try {
+                        app.setFeeStatus(FeeStatus.valueOf(feeStatusStr != null ? feeStatusStr.toUpperCase() : FeeStatus.UNPAID.name()));
+                    } catch (IllegalArgumentException | NullPointerException e) {
+                        app.setFeeStatus(FeeStatus.UNPAID);
+                    }
+
+                    app.setSubmitted(rs.getBoolean("is_submitted"));
+                    app.setScholarshipSubmitted(rs.getBoolean("is_scholarship_submitted"));
+
+                    return app;
+                }
             }
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
-
         return null; // Not found
     }
-//
+
     public static void updateApplicationStatus(String applicationId, Status newStatus) {
-        ArrayList<ApplicationFormData> allApps = loadAllApplications();
-        System.out.println("Applications loaded: " + allApps.size());
-
-        for (ApplicationFormData app : allApps) {
-            if (app.getApplicationId().equals(applicationId)) {
-                app.setStatus(newStatus);
-                break;
-            }
+        String sql = "UPDATE dbo.ApplicationForm SET status = ? WHERE application_form_id = ?";
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, newStatus.name());
+            ps.setInt(2, Integer.parseInt(applicationId));
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
-
-        try (FileWriter writer = new FileWriter(APPLICATION_FILE, false)) { // overwrite entire file
-            for (ApplicationFormData app : allApps) {
-                String applicationId1 = app.getApplicationId() != null ? app.getApplicationId() : "";
-                String firstName = (app.getUsers() != null && app.getUsers().getFirstName() != null)
-                        ? app.getUsers().getFirstName() : "Unknown";
-                String address = app.getAddress() != null ? app.getAddress() : "";
-                String board10 = app.getBoard10() != null ? app.getBoard10() : "";
-                String year10 = app.getYear10() != null ? app.getYear10() : "";
-                String percent10 = app.getPercent10() != null ? app.getPercent10() : "";
-                String stream10 = app.getStream10() != null ? app.getStream10() : "";
-                String board12 = app.getBoard12() != null ? app.getBoard12() : "";
-                String year12 = app.getYear12() != null ? app.getYear12() : "";
-                String percent12 = app.getPercent12() != null ? app.getPercent12() : "";
-                String stream12 = app.getStream12() != null ? app.getStream12() : "";
-                String program = app.getSelectedProgram() != null ? app.getSelectedProgram() : "N/A";
-                String college = app.getSelectedCollege() != null ? app.getSelectedCollege() : "N/A";
-                String email = app.getEmail() != null ? app.getEmail() : "n/a";
-                String status = app.getStatus() != null ? app.getStatus().name() : "UNKNOWN";
-                String testSchedule = app.getTestSchedule() != null ? app.getTestSchedule() : "null";
-                String testScore = app.getTestScore() != null ? app.getTestScore() : "null";
-                String feeStatusStr = app.getFeeStatus() != null ? app.getFeeStatus().name() : "PENDING";
-
-                String line = String.join(",",
-                        applicationId1,
-                        firstName,
-                        address,
-                        board10,
-                        year10,
-                        percent10,
-                        stream10,
-                        board12,
-                        year12,
-                        percent12,
-                        stream12,
-                        program,
-                        college,
-                        email,
-                        status,
-                        testSchedule,
-                        testScore,
-                        feeStatusStr
-
-                );
-                writer.write(line + System.lineSeparator());
-            }
-        }
-        catch (IOException e) {
-            System.out.println("Error updating application status: " + e.getMessage());
-        }
-
     }
 
     public static List<String> getAllApplicantIds() {
         List<String> ids = new ArrayList<>();
-        try {
-            ArrayList<ApplicationFormData> apps = loadAllApplications();
-            for (ApplicationFormData app : apps) {
-                ids.add(app.getApplicationId());
+        String sql = "SELECT CAST(application_form_id AS VARCHAR(50)) AS id FROM dbo.ApplicationForm";
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                ids.add(rs.getString("id"));
             }
-        }
-        catch (Exception e) {
+        } catch (SQLException e) {
             e.printStackTrace();
         }
         return ids;
     }
 
     public static Status getApplicationStatus(String applicationId) {
-        // Example: Look up from saved applications
-        ArrayList<ApplicationFormData> all = loadAllApplications();
-        for (ApplicationFormData app : all) {
-            if (app.getApplicationId().equals(applicationId)) {
-                return app.getStatus();
+        String sql = "SELECT status FROM dbo.ApplicationForm WHERE application_form_id = ?";
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setInt(1, Integer.parseInt(applicationId));
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next() && rs.getString("status") != null) {
+                    try {
+                        return Status.valueOf(rs.getString("status").toUpperCase());
+                    } catch (IllegalArgumentException ignored) {}
+                }
             }
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
         return Status.SUBMITTED; // Default fallback
     }
+
     public static Status getApplicationStatusByEmail(String email) {
-        // Example: Look up from saved applications
-        ArrayList<ApplicationFormData> all = loadAllApplications();
-        for (ApplicationFormData app : all) {
-            if (app.getEmail().equalsIgnoreCase(email)) {
-                return app.getStatus(); //
+        String sql = "SELECT TOP 1 status FROM dbo.ApplicationForm WHERE email = ? ORDER BY application_form_id DESC";
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, email);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next() && rs.getString("status") != null) {
+                    try {
+                        return Status.valueOf(rs.getString("status").toUpperCase());
+                    } catch (IllegalArgumentException ignored) {}
+                }
             }
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
         return Status.SUBMITTED;
+    }
+
+    // Helper to resolve program id from names
+    private static Integer findProgramId(String programName, String collegeName) {
+        String sql = """
+            SELECT p.ProgramID
+            FROM dbo.Program p
+            JOIN dbo.College c ON c.college_id = p.College_ID
+            WHERE p.ProgramName = ? AND c.college_name = ?
+        """;
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, programName);
+            ps.setString(2, collegeName);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt("ProgramID");
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 
 
