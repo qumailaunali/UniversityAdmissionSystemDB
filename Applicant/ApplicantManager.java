@@ -16,12 +16,6 @@ public class ApplicantManager {
             String line = String.join(",",
                     app.getApplicationId() != null ? app.getApplicationId() : "",
                     app.getUsers() != null && app.getUsers().getFirstName() != null ? app.getUsers().getFirstName() : "Unknown",
-                    app.getAddress() != null ? app.getAddress() : "",
-                    app.getBoard10() != null ? app.getBoard10() : "",
-                    app.getYear10() != null ? app.getYear10() : "",
-                    app.getPercent10() != null ? app.getPercent10() : "",
-                    app.getStream10() != null ? app.getStream10() : "",
-                    app.getBoard12() != null ? app.getBoard12() : "",
                     app.getYear12() != null ? app.getYear12() : "",
                     app.getPercent12() != null ? app.getPercent12() : "",
                     app.getStream12() != null ? app.getStream12() : "",
@@ -69,37 +63,29 @@ public class ApplicantManager {
                 String line = scanner.nextLine();
                 String[] parts = line.split(",");
 
-                if (parts.length < 17) {
+                if (parts.length < 11) {
                     continue;
                 }
 
                 String applicationID = parts[0];
                 String fullName = parts[1];
-                String address = parts[2];
-                String board10 = parts[3];
-                String year10 = parts[4];
-                String percent10 = parts[5];
-                String stream10 = parts[6];
-                String board12 = parts[7];
-                String year12 = parts[8];
-                String percent12 = parts[9];
-                String stream12 = parts[10];
-                String selectedProgramName = parts[11];
-                String selectedCollegeName = parts[12];
-                String email = parts[13];
-                String statusStr = parts[14];
-                String testSchedule = parts[15];
-                String testScore = parts[16];
-                String feeStatusStr = parts[17];
+                String year12 = parts[2];
+                String percent12 = parts[3];
+                String stream12 = parts[4];
+                String selectedProgramName = parts[5];
+                String selectedCollegeName = parts[6];
+                String email = parts[7];
+                String statusStr = parts[8];
+                String testSchedule = parts[9];
+                String testScore = parts[10];
+                String feeStatusStr = parts[11];
 
                 Applicant user = null;
 
                 ApplicationFormData app = new ApplicationFormData(
                         applicationID,
                         user,
-                        address,
-                        board10, year10, percent10, stream10,
-                        board12, year12, percent12, stream12,
+                        year12, percent12, stream12,
                         selectedProgramName,
                         selectedCollegeName,
                         email

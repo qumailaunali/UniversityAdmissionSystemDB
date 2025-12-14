@@ -144,20 +144,39 @@ public class CollegeManager {
         colleges.clear();
 
         if (connection == null) {
-            System.out.println("Database connection not available!");
+            System.out.println("ERROR: Database connection not available for loading colleges!");
             return;
         }
 
-        String collegeQuery = "SELECT college_id, college_name FROM dbo.College";
-        String programQuery = "SELECT ProgramID, ProgramName, Seats, Eligibility, Fee FROM dbo.Program WHERE CollegeID = ?";
+        System.out.println("Loading colleges from database...");
+
+        // Try both possible column name formats (college_id vs CollegeID)
+        String collegeQuery = "SELECT * FROM dbo.College";
+        String programQuery = "SELECT * FROM dbo.Program WHERE CollegeID = ?";
         String streamQuery = "SELECT StreamName FROM dbo.Stream WHERE ProgramID = ?";
 
         try (Statement stmt = connection.createStatement();
              ResultSet collegeRs = stmt.executeQuery(collegeQuery)) {
 
+            int collegeCount = 0;
             while (collegeRs.next()) {
-                int collegeId = collegeRs.getInt("college_id");
-                String collegeName = collegeRs.getString("college_name");
+                collegeCount++;
+                
+                // Try both column name formats
+                int collegeId;
+                String collegeName;
+                
+                try {
+                    collegeId = collegeRs.getInt("college_id");
+                    collegeName = collegeRs.getString("college_name");
+                } catch (SQLException e) {
+                    // Try alternate column names
+                    collegeId = collegeRs.getInt("CollegeID");
+                    collegeName = collegeRs.getString("CollegeName");
+                }
+                
+                System.out.println("Loading college: " + collegeName + " (ID: " + collegeId + ")");
+                
                 College college = new College(collegeName);
                 college.setCollegeId(collegeId);
 
@@ -188,16 +207,21 @@ public class CollegeManager {
 
                             college.addProgram(program);
                         }
+                    } catch (SQLException e) {
+                        System.out.println("Error loading programs for college " + collegeName + ": " + e.getMessage());
                     }
                 }
 
                 colleges.add(college);
             }
 
-            System.out.println("Colleges loaded from database successfully!");
+            System.out.println("Successfully loaded " + collegeCount + " colleges from database!");
+            System.out.println("Total colleges in memory: " + colleges.size());
 
         } catch (SQLException e) {
-            System.out.println("Error loading colleges from database!");
+            System.out.println("ERROR loading colleges from database!");
+            System.out.println("SQL Error: " + e.getMessage());
+            System.out.println("SQL State: " + e.getSQLState());
             e.printStackTrace();
         }
     }

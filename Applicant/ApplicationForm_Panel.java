@@ -27,8 +27,7 @@ public class ApplicationForm_Panel extends JPanel {
     private int applicationCount;
 
     private JComboBox<String> programDropdown, collegeDropdown, stream12Dropdown;
-    private JTextField addressField, board10Field, year10Field, percent10Field, stream10Field;
-    private JTextField board12Field, year12Field, percent12Field;
+    private JTextField year12Field, percent12Field;
     private JButton submitButton;
 
     private Applicant userInfo;
@@ -47,7 +46,7 @@ public class ApplicationForm_Panel extends JPanel {
         this.programManager = programManager;
         this.colleges = new ArrayList<>();
         applicationCount = readCounter();
-        collegeManager.loadFromFile("colleges.txt");
+//        collegeManager.loadFromFile("colleges.txt");
 
         setLayout(new BorderLayout());
         setBackground(COLORAZ_WHITE);
@@ -75,13 +74,6 @@ public class ApplicationForm_Panel extends JPanel {
         row = addLabelAndValue(formPanel, "Date of Birth:", String.valueOf(userInfo.getDateOfBirth()), row, gbc);
         row = addLabelAndValue(formPanel, "Gender:", String.valueOf(userInfo.getGender()), row, gbc);
 
-        addressField = addFieldWithPlaceholder(formPanel, "Address:", "Enter your address", row++, gbc);
-        board10Field = addFieldWithPlaceholder(formPanel, "10th Board:", "Enter your 10th board", row++, gbc);
-        year10Field = addFieldWithPlaceholder(formPanel, "10th Year:", "Enter year of 10th", row++, gbc);
-        percent10Field = addFieldWithPlaceholder(formPanel, "10th Percentage:", "Enter your 10th %", row++, gbc);
-        stream10Field = addFieldWithPlaceholder(formPanel, "10th Stream:", "Enter your 10th stream", row++, gbc);
-
-        board12Field = addFieldWithPlaceholder(formPanel, "12th Board:", "Enter your 12th board", row++, gbc);
         year12Field = addFieldWithPlaceholder(formPanel, "12th Year:", "Enter year of 12th", row++, gbc);
         percent12Field = addFieldWithPlaceholder(formPanel, "12th Percentage:", "Enter your 12th %", row++, gbc);
 
@@ -230,12 +222,6 @@ public class ApplicationForm_Panel extends JPanel {
             ApplicationFormData applicationFormData = new ApplicationFormData(
                     applicationId,
                     userInfo,                 // User object, not email
-                    addressField.getText(),
-                    board10Field.getText(),
-                    year10Field.getText(),
-                    percent10Field.getText(),
-                    stream10Field.getText(),
-                    board12Field.getText(),
                     year12Field.getText(),
                     percent12Field.getText(),
                     stream12Dropdown.getSelectedItem().toString(),
@@ -294,12 +280,6 @@ public class ApplicationForm_Panel extends JPanel {
     }
 
     private void clearForm() {
-        addressField.setText("");
-        board10Field.setText("");
-        year10Field.setText("");
-        percent10Field.setText("");
-        stream10Field.setText("");
-        board12Field.setText("");
         year12Field.setText("");
         percent12Field.setText("");
         stream12Dropdown.setSelectedIndex(0);
@@ -326,28 +306,12 @@ public class ApplicationForm_Panel extends JPanel {
 
 
     private boolean validateAllFields() {
-        if (addressField.getText().trim().isEmpty()) {
-            showError("Address cannot be empty");
-            addressField.requestFocus();
-            return false;
-        }
-
-        if (!validateEducationField(board10Field, "10th Board Name") ||
-                !validateYearField(year10Field, "10th Year") ||
-                !validatePercentageField(percent10Field, "10th Percentage") ||
-                !validateEducationField(stream10Field, "10th Stream")) {
-            return false;
-        }
-
-
-        if (!validateEducationField(board12Field, "12th Board Name") ||
-                !validateYearField(year12Field, "12th Year") ||
+        if (!validateYearField(year12Field, "12th Year") ||
                 !validatePercentageField(percent12Field, "12th Percentage")) {
             return false;
         }
 
         try {
-            int year10 = Integer.parseInt(year10Field.getText().trim());
             int year12 = Integer.parseInt(year12Field.getText().trim());
 
             if (year12 <= year10) {

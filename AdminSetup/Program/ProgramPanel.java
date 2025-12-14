@@ -5,6 +5,7 @@ import AdminSetup.College.CollegeManager;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.ArrayList;
 import java.util.List;
 
 public class ProgramPanel extends JPanel {
@@ -14,20 +15,18 @@ public class ProgramPanel extends JPanel {
     private final JTextField seatsField;
     private final JTextField eligibilityField;
     private final JTextField feeField;
+    private final ProgramManager programManager;
     private final List<JCheckBox> streamChecks = new java.util.ArrayList<>();
-    private final String[] streams = {
-            "Pre-Medical",
-            "Pre-Engineering",
-            "Computer Science",
-            "Commerce",
-            "Humanities/Arts",
-            "General Science"
-    };
+    private final List<ProgramManager.StreamData> streamDataList = new java.util.ArrayList<>();
     private final DefaultListModel<String> programListModel;
     private final JList<String> programList;
 
     public ProgramPanel() {
         this.collegeManager = new CollegeManager();
+        this.programManager = new ProgramManager();
+        
+        // Load streams from database
+        loadStreamsFromDatabase();
 
         setLayout(new BorderLayout(10, 10));
 
@@ -52,10 +51,6 @@ public class ProgramPanel extends JPanel {
 
         JLabel feeLabel = new JLabel("Program Fee:");
         feeField = new JTextField(10);
-
-        for (String stream : streams) {
-            streamChecks.add(new JCheckBox(stream));
-        }
 
         gbc.gridx = 0; gbc.gridy = 0;
         formPanel.add(collegeLabel, gbc);
@@ -85,7 +80,7 @@ public class ProgramPanel extends JPanel {
         gbc.gridx = 0; gbc.gridy++;
         formPanel.add(new JLabel("Allowed Streams:"), gbc);
         gbc.gridx = 1;
-        JPanel streamPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JPanel streamPanel = new JPanel(new GridLayout(0, 2, 5, 5));
         for (JCheckBox cb : streamChecks) {
             streamPanel.add(cb);
         }
@@ -138,31 +133,32 @@ public class ProgramPanel extends JPanel {
 
             College college = collegeManager.getCollegeByName(collegeName);
             if (college != null) {
-                for (Program p : college.getPrograms()) {
-                    if (p.getName().equalsIgnoreCase(programName)) {
-                        JOptionPane.showMessageDialog(this, "Program already exists in this college.");
-                        return;
+                // Collect selected stream IDs
+                List<Integer> selectedStreamIds = new ArrayList<>();
+                for (int i = 0; i < streamChecks.size(); i++) {
+                    if (streamChecks.get(i).isSelected()) {
+                        selectedStreamIds.add(streamDataList.get(i).getStreamId());
                     }
                 }
-
-                Program newProgram = new Program(programName, seats, eligibility, fee);
-                boolean streamSelected = false;
-                for (JCheckBox cb : streamChecks) {
-                    if (cb.isSelected()) {
-                        newProgram.addAllowedStream(cb.getText());
-                        streamSelected = true;
-                    }
-                }
-                if (!streamSelected) {
+                
+                if (selectedStreamIds.isEmpty()) {
                     JOptionPane.showMessageDialog(this, "Please select at least one allowed stream.");
                     return;
                 }
-                college.addProgram(newProgram);
-                collegeManager.saveToFile("colleges.txt");
 
-                JOptionPane.showMessageDialog(this, "Program added successfully!");
-                refreshProgramList();
-                clearFields();
+                // Add program to database
+                boolean success = programManager.addProgram(
+                    programName, seats, eligibility, fee, 
+                    college.getCollegeId(), selectedStreamIds
+                );
+
+                if (success) {
+                    JOptionPane.showMessageDialog(this, "Program added successfully!");
+                    refreshProgramList();
+                    clearFields();
+                } else {
+                    JOptionPane.showMessageDialog(this, "Failed to add program. Please try again.");
+                }
             }
         } catch (NumberFormatException ex) {
             JOptionPane.showMessageDialog(this, "Seats, Eligibility, and Fee must be valid numbers.");
@@ -185,7 +181,7 @@ public class ProgramPanel extends JPanel {
                 List<Program> programs = college.getPrograms();
                 programs.removeIf(p -> p.getName().equalsIgnoreCase(programName));
 
-                collegeManager.saveToFile("colleges.txt");
+//                collegeManager.saveToFile("colleges.txt");
                 refreshProgramList();
                 JOptionPane.showMessageDialog(this, "Program removed.");
             }
@@ -198,10 +194,22 @@ public class ProgramPanel extends JPanel {
         if (collegeName != null) {
             College college = collegeManager.getCollegeByName(collegeName);
             if (college != null) {
-                for (Program p : college.getPrograms()) {
+                List<Program> programs = programManager.getProgramsByCollege(college.getCollegeId());
+                for (Program p : programs) {
                     programListModel.addElement(p.getProgramDetails());
                 }
             }
+        }
+    }
+
+    private void loadStreamsFromDatabase() {
+        streamDataList.clear();
+        streamChecks.clear();
+        
+        List<ProgramManager.StreamData> streams = programManager.getAllStreams();
+        for (ProgramManager.StreamData stream : streams) {
+            streamDataList.add(stream);
+            streamChecks.add(new JCheckBox(stream.getStreamName()));
         }
     }
 
