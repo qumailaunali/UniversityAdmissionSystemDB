@@ -1,25 +1,69 @@
 package Authentication;
 
-import Authentication.LoginFrame;
-import Authentication.UserLoginManager;
-import Authentication.Users;
+import Database.DBConnection;
 
-import java.util.ArrayList;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 
 public class UserLogin extends UserLoginManager {
-    public UserLogin(){
-        transferData();
-    }
+    private Connection connection;
 
-    public Users login(String email, String pass){
-        for (int i = 0; i < users.size(); i++) {
-            if(email.equals(users.get(i).getEmail()) && pass.equals(users.get(i).getPassword()) ){
-                return users.get(i);
-            }
+    public UserLogin() {
+        super();
+        try {
+            connection = DBConnection.getConnection();
+        } catch (SQLException e) {
+            System.out.println("Database connection failed!");
+            e.printStackTrace();
         }
-        return null;
     }
 
+    public Users login(String email, String pass) {
+        try {
+            if (connection == null) {
+                System.out.println("Database connection not available!");
+                return null;
+            }
+
+            // Query database for user credentials
+            String query = "SELECT ApplicantID, FirstName, LastName, Email, Password, SecurityQuestion, IDNumber, DOB, Gender, PhoneNumber FROM dbo.Applicant WHERE Email = ? AND Password = ?";
+            PreparedStatement pstmt = connection.prepareStatement(query);
+            pstmt.setString(1, email);
+            pstmt.setString(2, pass);
+
+            ResultSet rs = pstmt.executeQuery();
+
+            if (rs.next()) {
+                // User found - create Users object with database data
+                Users user = new Users(
+                        rs.getString("FirstName"),
+                        rs.getString("LastName"),
+                        rs.getString("Email"),
+                        rs.getString("Password"),
+                        rs.getString("SecurityQuestion"),
+                        rs.getString("IDNumber"),
+                        rs.getDate("DOB") != null ? rs.getDate("DOB").toLocalDate() : null,
+                        Gender.valueOf(rs.getString("Gender")),
+                        rs.getString("PhoneNumber"),
+                        "USER" + rs.getInt("ApplicantID")
+                );
+                rs.close();
+                pstmt.close();
+                return user;
+            } else {
+                rs.close();
+                pstmt.close();
+                return null;
+            }
+
+        } catch (SQLException e) {
+            System.out.println("Error during login: " + e.getMessage());
+            e.printStackTrace();
+            return null;
+        }
+    }
 
     public static void main(String[] args) {
         new LoginFrame();
