@@ -1,13 +1,17 @@
 package Authentication;
 
-import java.io.File;
-import java.io.FileWriter;
+import Database.DBConnection;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.Scanner;
 
 public class AdminLogin {
-    public ArrayList <Admins> adminsArrayList;
+    public ArrayList<Admins> adminsArrayList;
     private static Admins currentAdmin;
+    private Connection connection;
 
     public static void setCurrentAdmin(Admins admin) {
         currentAdmin = admin;
@@ -17,66 +21,106 @@ public class AdminLogin {
         return currentAdmin;
     }
 
-    public AdminLogin(){
-        adminsArrayList= new ArrayList<>();
-        transferData();
-    }
-
-    public boolean login(String email,String password){
-        for (Admins admin : adminsArrayList) {
-            if (email.equals(admin.getEmail()) && password.equals(admin.getPassword())) {
-                setCurrentAdmin(admin);
-                return true;
-            }
-        }
-        return false;
-    }
-
-
-    public void saveAdmin (){
-        try{
-            File file = new File("AdminCredentials.txt");
-            if(!file.exists()){
-                file.createNewFile();
-            }
-            FileWriter writer = new FileWriter(file,false);
-            for (int i = 0; i <adminsArrayList.size() ; i++) {
-
-                writer.write(adminsArrayList.get(i).getEmail()+ "," +
-                        adminsArrayList.get(i).getPassword() + "," +adminsArrayList.get(i).isSuperAdmin()  +"\n" );
-            }
-            writer.close();
-        }
-
-        catch (Exception e){
+    public AdminLogin() {
+        adminsArrayList = new ArrayList<>();
+        try {
+            connection = DBConnection.getConnection();
+            transferData();
+        } catch (SQLException e) {
+            System.out.println("Database connection failed!");
             e.printStackTrace();
         }
     }
 
-    public void transferData () {
-        try{
-            File file = new File("AdminCredentials.txt");
-            if(!file.exists()){
-                return;
-            }
-
-            Scanner readFile = new Scanner(file);
-            while (readFile.hasNextLine()){
-                String line = readFile.nextLine();
-                String [] parts = line.split(",");
-
-                Admins admin = new Admins(parts[0], parts[1]);
-
-                if (parts.length >= 3) {
-                    admin.setSuperAdmin(Boolean.parseBoolean(parts[2]));
-                }
-
-                adminsArrayList.add(admin);
-
-            }
+    public boolean login(String email, String password) {
+        if (connection == null) {
+            System.out.println("Database connection not available!");
+            return false;
         }
 
-        catch (Exception e){
+        String query = "SELECT Email, Password, IsSuperAdmin FROM dbo.Admin WHERE Email = ? AND Password = ?";
+
+        try (PreparedStatement stmt = connection.prepareStatement(query)) {
+            stmt.setString(1, email);
+            stmt.setString(2, password);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    Admins admin = new Admins(rs.getString("Email"), rs.getString("Password"));
+                    admin.setSuperAdmin(rs.getBoolean("IsSuperAdmin"));
+                    setCurrentAdmin(admin);
+                    return true;
+                }
+            }
+        } catch (SQLException e) {
+            System.out.println("Error validating admin login!");
+            e.printStackTrace();
+        }
+
+        return false;
+    }
+
+
+    public void saveAdmin() {
+        if (connection == null) {
+            System.out.println("Database connection not available!");
+            return;
+        }
+
+        String checkQuery = "SELECT AdminID FROM dbo.Admin WHERE Email = ?";
+        String insertQuery = "INSERT INTO dbo.Admin (Email, Password, IsSuperAdmin) VALUES (?, ?, ?)";
+        String updateQuery = "UPDATE dbo.Admin SET Password = ?, IsSuperAdmin = ? WHERE Email = ?";
+
+        try {
+            for (Admins admin : adminsArrayList) {
+                try (PreparedStatement checkStmt = connection.prepareStatement(checkQuery)) {
+                    checkStmt.setString(1, admin.getEmail());
+                    try (ResultSet rs = checkStmt.executeQuery()) {
+                        if (rs.next()) {
+                            try (PreparedStatement updateStmt = connection.prepareStatement(updateQuery)) {
+                                updateStmt.setString(1, admin.getPassword());
+                                updateStmt.setBoolean(2, admin.isSuperAdmin());
+                                updateStmt.setString(3, admin.getEmail());
+                                updateStmt.executeUpdate();
+                            }
+                        } else {
+                            try (PreparedStatement insertStmt = connection.prepareStatement(insertQuery)) {
+                                insertStmt.setString(1, admin.getEmail());
+                                insertStmt.setString(2, admin.getPassword());
+                                insertStmt.setBoolean(3, admin.isSuperAdmin());
+                                insertStmt.executeUpdate();
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            System.out.println("Error saving admins to database!");
+            e.printStackTrace();
+        }
+    }
+
+    public void transferData() {
+        adminsArrayList.clear();
+
+        if (connection == null) {
+            System.out.println("Database connection not available!");
+            return;
+        }
+
+        String query = "SELECT Email, Password, IsSuperAdmin FROM dbo.Admin";
+
+        try (PreparedStatement stmt = connection.prepareStatement(query);
+             ResultSet rs = stmt.executeQuery()) {
+
+            while (rs.next()) {
+                Admins admin = new Admins(rs.getString("Email"), rs.getString("Password"));
+                admin.setSuperAdmin(rs.getBoolean("IsSuperAdmin"));
+                adminsArrayList.add(admin);
+            }
+
+        } catch (SQLException e) {
+            System.out.println("Error loading admins from database!");
             e.printStackTrace();
         }
 
@@ -85,7 +129,7 @@ public class AdminLogin {
             superAdmin.setSuperAdmin(true);
             adminsArrayList.add(superAdmin);
             saveAdmin();
-            System.out.println("Default super admin created.");
+            System.out.println("Default super admin created in database.");
         }
     }
 

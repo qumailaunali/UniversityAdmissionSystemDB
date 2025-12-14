@@ -86,7 +86,6 @@ private void handleAddCollege() {
         }
     }
     collegeManager.addCollege(collegeName);
-    collegeManager.saveToFile("colleges.txt");
     refreshCollegeList();
     collegeNameField.setText("");
     JOptionPane.showMessageDialog(this, "College added successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);

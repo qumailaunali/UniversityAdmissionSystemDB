@@ -5,12 +5,21 @@ import AdminSetup.Program.Program;
 import java.util.ArrayList;
 
 public class College {
+    private int collegeId;
     private String name;
     private ArrayList<Program> programs;
 
     public College(String name) {
         this.name = name;
         this.programs = new ArrayList<>();
+    }
+
+    public int getCollegeId() {
+        return collegeId;
+    }
+
+    public void setCollegeId(int collegeId) {
+        this.collegeId = collegeId;
     }
 
     public String getName() {

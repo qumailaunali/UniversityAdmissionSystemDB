@@ -3,6 +3,7 @@ package AdminSetup.Program;
 import java.util.ArrayList;
 
 public class Program {
+    private int programId;
     private String name;
     private int seats;
     private int eligibility;
@@ -16,6 +17,14 @@ public class Program {
         this.eligibility = eligibility;
         this.fee = fee;
         this.allowedStreams = new ArrayList<>();
+    }
+
+    public int getProgramId() {
+        return programId;
+    }
+
+    public void setProgramId(int programId) {
+        this.programId = programId;
     }
 
     public Program(String name, int seats, int eligibility) {

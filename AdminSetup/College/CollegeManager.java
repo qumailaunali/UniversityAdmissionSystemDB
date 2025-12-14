@@ -1,25 +1,72 @@
 package AdminSetup.College;
 
 import AdminSetup.Program.Program;
+import Database.DBConnection;
 
-import java.io.*;
+import java.sql.*;
 import java.util.ArrayList;
 
 public class CollegeManager {
     private final ArrayList<College> colleges;
-    private final String fileName = "colleges.txt";
+    private Connection connection;
 
     public CollegeManager() {
         colleges = new ArrayList<>();
-        loadFromFile(fileName);
+        try {
+            connection = DBConnection.getConnection();
+            loadFromDatabase();
+        } catch (SQLException e) {
+            System.out.println("Database connection failed!");
+            e.printStackTrace();
+        }
     }
 
     public void addCollege(String name) {
-        colleges.add(new College(name));
+        if (connection == null) {
+            System.out.println("Database connection not available!");
+            return;
+        }
+
+        String insertQuery = "INSERT INTO dbo.College (college_name) VALUES (?)";
+        try (PreparedStatement pstmt = connection.prepareStatement(insertQuery, Statement.RETURN_GENERATED_KEYS)) {
+            pstmt.setString(1, name);
+            pstmt.executeUpdate();
+
+            ResultSet keys = pstmt.getGeneratedKeys();
+            if (keys.next()) {
+                int collegeId = keys.getInt(1);
+                College college = new College(name);
+                college.setCollegeId(collegeId);
+                colleges.add(college);
+            }
+            keys.close();
+        } catch (SQLException e) {
+            System.out.println("Error adding college to database!");
+            e.printStackTrace();
+        }
     }
 
     public boolean removeCollegeByName(String name) {
-        return colleges.removeIf(c -> c.getName().equalsIgnoreCase(name));
+        if (connection == null) {
+            System.out.println("Database connection not available!");
+            return false;
+        }
+
+        String deleteQuery = "DELETE FROM dbo.College WHERE college_name = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(deleteQuery)) {
+            pstmt.setString(1, name);
+            int rowsAffected = pstmt.executeUpdate();
+            
+            if (rowsAffected > 0) {
+                colleges.removeIf(c -> c.getName().equalsIgnoreCase(name));
+                return true;
+            }
+            return false;
+        } catch (SQLException e) {
+            System.out.println("Error removing college from database!");
+            e.printStackTrace();
+            return false;
+        }
     }
 
     public ArrayList<College> getAllColleges() {
@@ -87,57 +134,71 @@ public class CollegeManager {
         return result;
     }
 
-    public void saveToFile(String filename) {
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(filename))) {
-            for (College college : colleges) {
-                writer.write("College:" + college.getName());
-                writer.newLine();
-                for (Program program : college.getPrograms()) {
-                    writer.write("Program:" + program.getName() + "," + program.getSeats() + "," +
-                            program.getEligibility() + "," + program.getFee());
-                    writer.newLine();
-                    for (String stream : program.getAllowedStreams()) {
-                        writer.write("Stream:" + stream);
-                        writer.newLine();
-                    }
-                }
-            }
-        } catch (IOException e) {
-            throw new RuntimeException("Error saving to file: " + filename, e);
-        }
+    public void saveToDatabase() {
+        // This method is now mostly handled by addCollege and ProgramManager
+        // Can be used for batch updates if needed
+        System.out.println("Colleges are automatically saved to database.");
     }
 
-    public void loadFromFile(String filename) {
+    public void loadFromDatabase() {
         colleges.clear();
 
-        try (BufferedReader reader = new BufferedReader(new FileReader(filename))) {
-            String line;
-            College currentCollege = null;
-            Program currentProgram = null;
-
-            while ((line = reader.readLine()) != null) {
-                if (line.startsWith("College:")) {
-                    String collegeName = line.substring(8).trim();
-                    currentCollege = new College(collegeName);
-                    colleges.add(currentCollege);
-                }
-                else if (line.startsWith("Program:") && currentCollege != null) {
-                    String[] parts = line.substring(8).split(",");
-                    String name = parts[0].trim();
-                    int seats = Integer.parseInt(parts[1].trim());
-                    int eligibility = Integer.parseInt(parts[2].trim());
-                    double fee = Double.parseDouble(parts[3].trim());
-                    currentProgram = new Program(name, seats, eligibility, fee);
-                    currentCollege.addProgram(currentProgram);
-                }
-                else if (line.startsWith("Stream:") && currentProgram != null) {
-                    String stream = line.substring(7).trim();
-                    currentProgram.addAllowedStream(stream);
-                }
-            }
+        if (connection == null) {
+            System.out.println("Database connection not available!");
+            return;
         }
-        catch (IOException e) {
-            throw new RuntimeException("Error loading from file: " + filename, e);
+
+        String collegeQuery = "SELECT college_id, college_name FROM dbo.College";
+        String programQuery = "SELECT ProgramID, ProgramName, Seats, Eligibility, Fee FROM dbo.Program WHERE CollegeID = ?";
+        String streamQuery = "SELECT StreamName FROM dbo.Stream WHERE ProgramID = ?";
+
+        try (Statement stmt = connection.createStatement();
+             ResultSet collegeRs = stmt.executeQuery(collegeQuery)) {
+
+            while (collegeRs.next()) {
+                int collegeId = collegeRs.getInt("college_id");
+                String collegeName = collegeRs.getString("college_name");
+                College college = new College(collegeName);
+                college.setCollegeId(collegeId);
+
+                // Load programs for this college
+                try (PreparedStatement programStmt = connection.prepareStatement(programQuery)) {
+                    programStmt.setInt(1, collegeId);
+                    try (ResultSet programRs = programStmt.executeQuery()) {
+                        while (programRs.next()) {
+                            int programId = programRs.getInt("ProgramID");
+                            String programName = programRs.getString("ProgramName");
+                            int seats = programRs.getInt("Seats");
+                            int eligibility = programRs.getInt("Eligibility");
+                            double fee = programRs.getDouble("Fee");
+
+                            Program program = new Program(programName, seats, eligibility, fee);
+                            program.setProgramId(programId);
+
+                            // Load streams for this program
+                            try (PreparedStatement streamStmt = connection.prepareStatement(streamQuery)) {
+                                streamStmt.setInt(1, programId);
+                                try (ResultSet streamRs = streamStmt.executeQuery()) {
+                                    while (streamRs.next()) {
+                                        String streamName = streamRs.getString("StreamName");
+                                        program.addAllowedStream(streamName);
+                                    }
+                                }
+                            }
+
+                            college.addProgram(program);
+                        }
+                    }
+                }
+
+                colleges.add(college);
+            }
+
+            System.out.println("Colleges loaded from database successfully!");
+
+        } catch (SQLException e) {
+            System.out.println("Error loading colleges from database!");
+            e.printStackTrace();
         }
     }
 }
