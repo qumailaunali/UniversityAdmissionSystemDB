@@ -142,12 +142,10 @@ public class SetTestDatePanel extends JPanel {
         private final JPanel panel;
         private final JButton dateButton;
         private final JButton subjectButton;
-        private final JTable table;
         private int editingRow;
 
         public ActionCellEditor(JCheckBox checkBox, DefaultTableModel model, JTable table) {
             super(checkBox);
-            this.table = table;
             panel = new JPanel(new FlowLayout());
             dateButton = new JButton("Set Date");
             subjectButton = new JButton("Set Subjects");
@@ -268,12 +266,10 @@ public class SetTestDatePanel extends JPanel {
         private final JPanel panel;
         private final JButton offerButton;
         private final JButton rejectButton;
-        private final JTable table;
         private int editingRow;
 
         public DecisionCellEditor(JCheckBox checkBox, DefaultTableModel model, JTable table) {
             super(checkBox);
-            this.table = table;
             panel = new JPanel(new FlowLayout());
             offerButton = new JButton("Send Offer");
             rejectButton = new JButton("Reject");

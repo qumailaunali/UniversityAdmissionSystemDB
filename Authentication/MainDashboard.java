@@ -47,12 +47,12 @@ public class MainDashboard extends JFrame {
 
 
         user.addActionListener(e -> {
-            Myframe myframe = new Myframe();
+            new Myframe();
             dispose();
         });
 
         admin.addActionListener(e -> {
-            AdminLoginFrame loginFrame = new AdminLoginFrame();
+            new AdminLoginFrame();
             dispose();
         });
 

@@ -98,7 +98,7 @@ public class LoginFrame extends JFrame {
 //        });
         Enter.addActionListener(e -> {
             String email = emailField.getText();
-            String password2 = passwordField.getText();
+            String password2 = new String(passwordField.getPassword());
 
             Users user = userLogin.login(email, password2);  // login returns User object
 

@@ -7,7 +7,6 @@ import java.awt.*;
 
 public class AdvancedMathTest extends JFrame {
     private static int advMathScore;
-    private EntryTestRecordManager.EntryTestRecord record;
 
     private final String[] questions = {
             "1. What is the derivative of sin(x)?",
@@ -44,7 +43,6 @@ public class AdvancedMathTest extends JFrame {
     private final ButtonGroup[] groups = new ButtonGroup[10];
 
     public AdvancedMathTest(EntryTestRecordManager.EntryTestRecord record) {
-        this.record = record;
         setTitle("Advanced Math Entry Test");
 
         JPanel contentPanel = new JPanel();
@@ -97,7 +95,6 @@ public class AdvancedMathTest extends JFrame {
                 }
             }
             advMathScore = score;
-            record.setAdvMathTaken(true);
             JOptionPane.showMessageDialog(this, "Score: " + score + "/10");
             dispose();
             JOptionPane.showMessageDialog(this, "Score: " + score + "/10");

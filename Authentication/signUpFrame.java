@@ -111,7 +111,7 @@ public class signUpFrame extends JFrame {
 
 
         enter.addActionListener(e -> {
-            String passWord = passwordField.getText().trim();
+            String passWord = new String(passwordField.getPassword()).trim();
             String securityAnswer = securityField.getText().trim();
             String cnicVal = cnicField.getText().trim();
             String dobText = dobField.getText().trim();

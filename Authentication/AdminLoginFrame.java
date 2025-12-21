@@ -67,7 +67,7 @@ public class AdminLoginFrame extends JFrame{
         this.add(backButton);
 
         backButton.addActionListener(e -> {
-            Myframe myframe = new Myframe();
+            new Myframe();
             dispose();
         });
 

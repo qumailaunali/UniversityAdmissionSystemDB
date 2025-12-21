@@ -76,7 +76,7 @@ public class ForgetPasswordFrame extends JFrame {
         this.add(backButton);
 
         backButton.addActionListener(e -> {
-            UserLogin userLogin = new UserLogin();
+            new UserLogin();
             dispose();
         });
 
@@ -89,7 +89,7 @@ public class ForgetPasswordFrame extends JFrame {
 
             if(forget.equals("Password reset successful!")){
                 JOptionPane.showMessageDialog(null,"Password reset successful!");
-                LoginFrame loginFrame = new LoginFrame();
+                new LoginFrame();
                 dispose();
 
             }

@@ -6,7 +6,6 @@ import java.awt.*;
 
 public class BioTest extends JFrame {
     private static int bioMarks;
-    private EntryTestRecordManager.EntryTestRecord record;
     private String[] questions = {
             "1. Powerhouse of cell?",
             "2. Vitamin made in skin?",
@@ -42,7 +41,6 @@ public class BioTest extends JFrame {
     private ButtonGroup[] groups = new ButtonGroup[10];
 
     public BioTest(EntryTestRecordManager.EntryTestRecord record) {
-        this.record = record;
         setTitle("Bio Entry Test");
         setSize(800, 700); // initial size, can keep or remove
 
@@ -91,7 +89,6 @@ public class BioTest extends JFrame {
                 }
             }
             bioMarks=score;
-            record.setBiologyTaken(true);
             JOptionPane.showMessageDialog(this, "Score: " + score + "/10");
             dispose();
         });
