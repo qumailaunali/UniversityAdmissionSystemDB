@@ -1,6 +1,6 @@
 package Applicant;
 
-import AdminSetup.College.College;
+// import AdminSetup.College.College;
 import AdminSetup.College.CollegeManager;
 import AdminSetup.Program.Program;
 import AdminSetup.Program.ProgramManager;
@@ -32,14 +32,14 @@ public class ApplicationForm_Panel extends JPanel {
     private JButton submitButton;
 
     private Applicant userInfo;
-    private Status status;
-    private ArrayList<College> colleges;
+    // private Status status;
+    // private ArrayList<College> colleges;
 
     public ApplicationForm_Panel(Applicant userInfo, ProgramManager programManager, CollegeManager collegeManager) throws IOException {
         this.userInfo = userInfo;
         this.collegeManager = collegeManager;
         this.programManager = programManager;
-        this.colleges = new ArrayList<>();
+        // this.colleges = new ArrayList<>();
 //        collegeManager.loadFromFile("colleges.txt");
 
         setLayout(new BorderLayout());
@@ -402,15 +402,15 @@ public class ApplicationForm_Panel extends JPanel {
         return -1;
     }
 
-    private boolean validateEducationField(JTextField field, String fieldName) {
-        String value = field.getText().trim();
-        if (value.isEmpty()) {
-            showError(fieldName + " cannot be empty");
-            field.requestFocus();
-            return false;
-        }
-        return true;
-    }
+    // private boolean validateEducationField(JTextField field, String fieldName) {
+    //     String value = field.getText().trim();
+    //     if (value.isEmpty()) {
+    //         showError(fieldName + " cannot be empty");
+    //         field.requestFocus();
+    //         return false;
+    //     }
+    //     return true;
+    // }
 
     private boolean validateYearField(JTextField field, String fieldName) {
         String value = field.getText().trim();

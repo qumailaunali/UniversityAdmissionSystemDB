@@ -14,7 +14,7 @@ public class LoginFrame extends JFrame {
 
 
     public LoginFrame(){
-        getContentPane().setBackground(Color.LIGHT_GRAY);
+        getContentPane().setBackground(new Color(245, 245, 245));
         JLabel title = new JLabel("Colaraz");
         title.setFont(new Font("Tahoma", Font.BOLD, 24));
         title.setForeground(Color.WHITE);
@@ -27,37 +27,78 @@ public class LoginFrame extends JFrame {
         green.add(title);
         add(green);
 
+        // Beautiful main heading with green background panel
+        JPanel headingPanel = new JPanel();
+        headingPanel.setBackground(new Color(116, 202, 74));
+        headingPanel.setBounds(0, 35, 1300, 100);
+        headingPanel.setLayout(null);
+        
+        JLabel mainHeading = new JLabel("University Admission System");
+        mainHeading.setFont(new Font("Arial", Font.BOLD, 42));
+        mainHeading.setForeground(Color.WHITE);
+        mainHeading.setBounds(150, 15, 1000, 70);
+        mainHeading.setHorizontalAlignment(SwingConstants.CENTER);
+        headingPanel.add(mainHeading);
+
         JLabel title2=new JLabel();
-        title2.setText("Login");
-        title2.setBounds(600, 100, 100, 40);
-        title2.setFont(new Font("Arial", Font.BOLD, 24));
+        title2.setText("Student Login");
+        title2.setBounds(0, 180, 1300, 40);
+        title2.setFont(new Font("Arial", Font.BOLD, 32));
+        title2.setForeground(new Color(116, 202, 74));
+        title2.setHorizontalAlignment(SwingConstants.CENTER);
 
         JLabel username;
         JLabel password;
-        username=new JLabel("Enter your Email ");
-        username.setFont(new Font("Tahoma", Font.PLAIN, 20));
-        username.setBounds(375, 160, 220, 40);
-        password= new JLabel("Enter your password ");
-        password.setFont(new Font("Tahoma", Font.PLAIN, 20));
-        password.setBounds(375, 240, 220, 40);
+        username=new JLabel("Email");
+        username.setFont(new Font("Arial", Font.BOLD, 18));
+        username.setForeground(new Color(80, 80, 80));
+        username.setBounds(450, 270, 150, 30);
+        
+        password= new JLabel("Password");
+        password.setFont(new Font("Arial", Font.BOLD, 18));
+        password.setForeground(new Color(80, 80, 80));
+        password.setBounds(450, 350, 150, 30);
 
         JTextField emailField;
         JPasswordField passwordField;
         emailField= new JTextField();
-        emailField.setBounds(650, 170, 180, 25);
+        emailField.setBounds(450, 305, 400, 40);
+        emailField.setFont(new Font("Arial", Font.PLAIN, 16));
+        emailField.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(180, 180, 180), 2),
+            BorderFactory.createEmptyBorder(5, 10, 5, 10)
+        ));
+        
         passwordField = new JPasswordField();
-        passwordField.setBounds(650, 250, 180, 25);
+        passwordField.setBounds(450, 385, 400, 40);
+        passwordField.setFont(new Font("Arial", Font.PLAIN, 16));
+        passwordField.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(180, 180, 180), 2),
+            BorderFactory.createEmptyBorder(5, 10, 5, 10)
+        ));
 
-        JButton Enter ;
-        Enter = new JButton("Enter");
-        Enter.setBounds(650, 310, 180, 30);
+        RoundedButton Enter;
+        Enter = new RoundedButton("Login", 25, 25);
+        Enter.setBounds(450, 460, 400, 45);
+        Enter.setFont(new Font("Arial", Font.BOLD, 18));
+        Enter.setBackground(new Color(116, 202, 74));
+        Enter.setForeground(Color.WHITE);
+        Enter.setCursor(new Cursor(Cursor.HAND_CURSOR));
 
-        JButton forget ;
-        forget= new JButton("Forget Password");
-        forget.setBounds(650, 350, 180, 30);
+        RoundedButton forget;
+        forget= new RoundedButton("Forget Password", 25, 25);
+        forget.setBounds(450, 520, 400, 40);
+        forget.setFont(new Font("Arial", Font.PLAIN, 16));
+        forget.setBackground(new Color(220, 220, 220));
+        forget.setForeground(new Color(80, 80, 80));
+        forget.setCursor(new Cursor(Cursor.HAND_CURSOR));
 
-        JButton backButton = new JButton("Back");
-        backButton.setBounds(10, 40, 70, 25);
+        RoundedButton backButton = new RoundedButton("← Back", 20, 20);
+        backButton.setBounds(15, 145, 100, 38);
+        backButton.setFont(new Font("Arial", Font.BOLD, 15));
+        backButton.setBackground(new Color(80, 80, 80));
+        backButton.setForeground(Color.WHITE);
+        backButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
         this.add(backButton);
 
         backButton.addActionListener(e -> {
@@ -72,6 +113,9 @@ public class LoginFrame extends JFrame {
         this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         this.setLayout(null);
         this.setVisible(true);
+        this.add(green);
+        this.add(headingPanel);
+        this.add(backButton);
         this.add(title2);
         this.add(username);
         this.add(password);

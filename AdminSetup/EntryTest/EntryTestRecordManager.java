@@ -6,30 +6,37 @@ import java.util.ArrayList;
 import Applicant.Status;
 import Database.DBConnection;
 
+// Manages entry test records and related database operations
+// Handles persistence, retrieval, and subject tracking for applicant entry tests
 public class EntryTestRecordManager {
 
+    // Inner class representing a single entry test record with all metadata and test results
     public static class EntryTestRecord {
-        private String applicantId;
-        private LocalDateTime testDateTime;
-        private boolean attempted;
-        private int score;
-        private ArrayList<String> subjects;
+        // Test record identifiers and timing
+        private String applicantId;              // Reference to applicant's application form ID
+        private LocalDateTime testDateTime;      // When the test was scheduled/taken
+        private boolean attempted;               // Whether applicant attempted the test
+        private int score;                       // Total score obtained in the test
+        private ArrayList<String> subjects;      // List of subjects taken in the test (English, Math, etc.)
 
-        private Status status;
-        private ArrayList<String> attemptedSubjects = new ArrayList<>();
-        private int totalScore = 0;
-        private boolean englishTaken = false;
-        private boolean mathTaken = false;
-        private boolean biologyTaken = false;
-        private boolean advMathTaken = false;
+        // Test tracking and status
+        private Status status;                   // Application status (SUBMITTED, APPROVED, REJECTED, etc.)
+        private ArrayList<String> attemptedSubjects = new ArrayList<>();  // Subjects attempted by applicant
+        private int totalScore = 0;              // Accumulated score across all subjects
+        // Individual subject completion flags for tracking which tests applicant completed
+        private boolean englishTaken = false;    // Flag for English test completion
+        private boolean mathTaken = false;       // Flag for Mathematics test completion
+        private boolean biologyTaken = false;    // Flag for Biology test completion
+        private boolean advMathTaken = false;    // Flag for Advanced Mathematics test completion
 
 
 
+        // Constructor: Initialize test record with core test metadata
         public EntryTestRecord(String applicantId, LocalDateTime testDateTime, boolean attempted, int score) {
-            this.applicantId = applicantId;
-            this.testDateTime = testDateTime;
-            this.attempted = attempted;
-            this.score = score;
+            this.applicantId = applicantId;          // Set applicant reference
+            this.testDateTime = testDateTime;        // Set test date/time
+            this.attempted = attempted;              // Set test attempt status
+            this.score = score;                      // Set test score
         }
 
 
@@ -136,126 +143,149 @@ public class EntryTestRecordManager {
     }
 
 
+    // Save or update a test record: insert new record or update existing one, manage associated subjects
     public void saveRecord(EntryTestRecord record) {
+        // SQL to check if test record already exists for this applicant
         String checkSql = "SELECT COUNT(*) FROM dbo.EntryTestRecord WHERE Application_Form_ID = ?";
-        // Use identity/auto-increment on EntryTestID (omit explicit ID to avoid identity insert errors)
+        // SQL to INSERT new test record with auto-increment EntryTestID (omit ID to let database generate)
         String insertSql = """
             INSERT INTO dbo.EntryTestRecord (Application_Form_ID, TestDateTime, Passed, Score)
             VALUES (?, ?, ?, ?)
         """;
+        // SQL to UPDATE existing test record with new date/time and score
         String updateSql = """
             UPDATE dbo.EntryTestRecord 
             SET TestDateTime = ?, Passed = ?, Score = ?
             WHERE Application_Form_ID = ?
         """;
 
+        // SQL to DELETE all existing subjects for this applicant (to refresh with new list)
         String deleteSubjectsSql = "DELETE FROM dbo.EntryTestSubjects WHERE Application_Form_ID = ?";
-        // EntryTestSubjectID assumed identity; omit explicit ID
+        // SQL to INSERT individual subject records (EntryTestSubjectID auto-incremented)
         String insertSubjectSql = "INSERT INTO dbo.EntryTestSubjects (Application_Form_ID, SubjectName) VALUES (?, ?)";
 
         try (Connection con = DBConnection.getConnection()) {
-            // Check if record exists
+            // Check if test record already exists for this applicant
             boolean exists = false;
             try (PreparedStatement checkPs = con.prepareStatement(checkSql)) {
+                // Bind applicant ID parameter to check if record exists
                 checkPs.setInt(1, Integer.parseInt(record.getApplicantId()));
                 try (ResultSet rs = checkPs.executeQuery()) {
                     if (rs.next() && rs.getInt(1) > 0) {
-                        exists = true;
+                        exists = true;  // Record found, will use UPDATE
                     }
                 }
             }
 
             if (exists) {
+                // Record exists, UPDATE it with new test date/time, pass status, and score
                 try (PreparedStatement ps = con.prepareStatement(updateSql)) {
+                    // Convert test date/time to SQL Timestamp format
                     Timestamp ts = Timestamp.valueOf(record.getTestDateTime() != null ? record.getTestDateTime() : LocalDateTime.now());
-                    ps.setTimestamp(1, ts);
-                    ps.setBoolean(2, record.isAttempted()); // map attempted -> Passed
-                    ps.setInt(3, record.getScore());
-                    ps.setInt(4, Integer.parseInt(record.getApplicantId()));
+                    ps.setTimestamp(1, ts);                                           // Bind test date/time
+                    ps.setBoolean(2, record.isAttempted());                           // Bind attempt status (mapped to Passed column)
+                    ps.setInt(3, record.getScore());                                  // Bind test score
+                    ps.setInt(4, Integer.parseInt(record.getApplicantId()));          // Bind applicant ID for WHERE clause
                     ps.executeUpdate();
                 }
             } else {
+                // Record doesn't exist, INSERT new test record
                 try (PreparedStatement ps = con.prepareStatement(insertSql)) {
-                    ps.setInt(1, Integer.parseInt(record.getApplicantId()));
+                    ps.setInt(1, Integer.parseInt(record.getApplicantId()));          // Bind applicant ID
                     Timestamp ts = Timestamp.valueOf(record.getTestDateTime() != null ? record.getTestDateTime() : LocalDateTime.now());
-                    ps.setTimestamp(2, ts);
-                    ps.setBoolean(3, record.isAttempted());
-                    ps.setInt(4, record.getScore());
+                    ps.setTimestamp(2, ts);                                           // Bind test date/time
+                    ps.setBoolean(3, record.isAttempted());                           // Bind attempt status
+                    ps.setInt(4, record.getScore());                                  // Bind test score
                     ps.executeUpdate();
                 }
             }
 
-            // Replace subjects set
+            // Replace subjects: DELETE old ones and INSERT updated list
             try (PreparedStatement delPs = con.prepareStatement(deleteSubjectsSql)) {
-                delPs.setInt(1, Integer.parseInt(record.getApplicantId()));
+                delPs.setInt(1, Integer.parseInt(record.getApplicantId()));  // Delete all subjects for this applicant
                 delPs.executeUpdate();
             }
+            // INSERT all new subjects if the list is not empty
             if (record.getSubjects() != null && !record.getSubjects().isEmpty()) {
                 for (String subj : record.getSubjects()) {
                     try (PreparedStatement insSub = con.prepareStatement(insertSubjectSql)) {
-                        insSub.setInt(1, Integer.parseInt(record.getApplicantId()));
-                        insSub.setString(2, subj);
+                        insSub.setInt(1, Integer.parseInt(record.getApplicantId()));  // Bind applicant ID
+                        insSub.setString(2, subj);                                     // Bind subject name (English, Math, etc.)
                         insSub.executeUpdate();
                     }
                 }
             }
         } catch (SQLException e) {
+            // Log any database errors encountered during save operation
             System.err.println("Failed to save test records: " + e.getMessage());
             e.printStackTrace();
         }
     }
 
+    // Retrieve a single test record by applicant ID with all associated subject data
     public EntryTestRecord getRecordById(String applicantId) {
+        // SQL to fetch test record metadata (date/time, pass status, score)
         String sql = """
             SELECT Application_Form_ID, TestDateTime, Passed, Score
             FROM dbo.EntryTestRecord
             WHERE Application_Form_ID = ?
         """;
 
+        // SQL to fetch all subjects taken in this test record
         String subjectsSql = "SELECT SubjectName FROM dbo.EntryTestSubjects WHERE Application_Form_ID = ?";
 
         try (Connection con = DBConnection.getConnection();
              PreparedStatement ps = con.prepareStatement(sql)) {
 
+            // Bind applicant ID to fetch their test record
             ps.setInt(1, Integer.parseInt(applicantId));
 
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
+                    // Extract test record fields from database row
                     String appId = String.valueOf(rs.getInt("Application_Form_ID"));
                     Timestamp timestamp = rs.getTimestamp("TestDateTime");
-                    LocalDateTime dateTime = timestamp != null ? timestamp.toLocalDateTime() : null;
+                    LocalDateTime dateTime = timestamp != null ? timestamp.toLocalDateTime() : null;  // Convert SQL Timestamp to LocalDateTime
                     boolean passed = rs.getBoolean("Passed");
                     int score = rs.getInt("Score");
 
+                    // Create new EntryTestRecord object with retrieved test data
                     EntryTestRecord record = new EntryTestRecord(appId, dateTime, passed, score);
 
+                    // Fetch all subjects associated with this test record
                     try (PreparedStatement ps2 = con.prepareStatement(subjectsSql)) {
-                        ps2.setInt(1, Integer.parseInt(applicantId));
+                        ps2.setInt(1, Integer.parseInt(applicantId));  // Bind applicant ID to get their subjects
                         try (ResultSet rs2 = ps2.executeQuery()) {
                             ArrayList<String> subjectList = new ArrayList<>();
+                            // Accumulate all subject names from query results
                             while (rs2.next()) {
-                                subjectList.add(rs2.getString("SubjectName"));
+                                subjectList.add(rs2.getString("SubjectName"));  // Add subject (English, Math, Biology, etc.)
                             }
+                            // Update record with subjects if list is not empty
                             if (!subjectList.isEmpty()) record.setSubjects(subjectList);
                         }
                     }
 
-                    return record;
+                    return record;  // Return populated record object
                 }
             }
         } catch (SQLException e) {
+            // Log any database errors encountered during fetch operation
             System.err.println("Error fetching test record: " + e.getMessage());
             e.printStackTrace();
         }
 
-        return null;
+        return null;  // Return null if record not found or error occurred
     }
 
 
 
+    // Load all test records for applicants who have PAID their fees along with their subjects
     public ArrayList<EntryTestRecord> loadAllRecords() {
         ArrayList<EntryTestRecord> list = new ArrayList<>();
 
+        // SQL to fetch all test records with INNER JOIN to ApplicationForm table
+        // INNER JOIN ensures only test records with PAID fee status are returned
         String sql = """
             SELECT et.Application_Form_ID, et.TestDateTime, et.Passed, et.Score
             FROM dbo.EntryTestRecord et
@@ -263,42 +293,50 @@ public class EntryTestRecordManager {
             WHERE af.fee_status = 'PAID'
         """;
 
+        // SQL to fetch all subjects for each test record
         String subjectsSql = "SELECT SubjectName FROM dbo.EntryTestSubjects WHERE Application_Form_ID = ?";
 
         try (Connection con = DBConnection.getConnection();
              PreparedStatement ps = con.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
 
+            // Iterate through each test record from the main query
             while (rs.next()) {
+                // Extract test record fields from database row
                 String appId = String.valueOf(rs.getInt("Application_Form_ID"));
                 Timestamp timestamp = rs.getTimestamp("TestDateTime");
-                LocalDateTime dateTime = timestamp != null ? timestamp.toLocalDateTime() : null;
+                LocalDateTime dateTime = timestamp != null ? timestamp.toLocalDateTime() : null;  // Convert SQL Timestamp to LocalDateTime
                 boolean passed = rs.getBoolean("Passed");
                 int score = rs.getInt("Score");
 
+                // Create new EntryTestRecord object with retrieved test data
                 EntryTestRecord record = new EntryTestRecord(appId, dateTime, passed, score);
 
+                // Fetch all subjects associated with this specific test record
                 try (PreparedStatement ps2 = con.prepareStatement(subjectsSql)) {
-                    ps2.setInt(1, Integer.parseInt(appId));
+                    ps2.setInt(1, Integer.parseInt(appId));  // Bind applicant ID to get their subjects
                     try (ResultSet rs2 = ps2.executeQuery()) {
                         ArrayList<String> subjectList = new ArrayList<>();
+                        // Accumulate all subject names from subject query results
                         while (rs2.next()) {
-                            subjectList.add(rs2.getString("SubjectName"));
+                            subjectList.add(rs2.getString("SubjectName"));  // Add subject (English, Math, Biology, etc.)
                         }
+                        // Update record with subjects if list is not empty
                         if (!subjectList.isEmpty()) record.setSubjects(subjectList);
                     }
                 }
 
+                // Add populated record to result list
                 list.add(record);
             }
         } catch (SQLException e) {
+            // Log any database errors encountered during load operation
             System.err.println("Error loading test records: " + e.getMessage());
             e.printStackTrace();
         }
 
-        return list;
+        return list;  // Return list of all loaded records (may be empty if error occurred)
     }
-
 
 
     // Removed unused getNextId() helper after switching to IDENTITY inserts

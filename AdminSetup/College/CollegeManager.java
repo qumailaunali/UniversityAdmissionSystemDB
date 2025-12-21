@@ -11,6 +11,7 @@ public class CollegeManager {
     private Connection connection;
 
     public CollegeManager() {
+        // Initialize college list and load all colleges from database
         colleges = new ArrayList<>();
         try {
             connection = DBConnection.getConnection();
@@ -22,6 +23,8 @@ public class CollegeManager {
     }
 
     public void addCollege(String name) {
+        // Insert new college into database and add to in-memory list
+        // SQL: INSERT INTO dbo.College (college_name) VALUES (?)
         if (connection == null) {
             System.out.println("Database connection not available!");
             return;
@@ -31,7 +34,7 @@ public class CollegeManager {
         try (PreparedStatement pstmt = connection.prepareStatement(insertQuery, Statement.RETURN_GENERATED_KEYS)) {
             pstmt.setString(1, name);
             pstmt.executeUpdate();
-
+            // Retrieve auto-generated college ID from database
             ResultSet keys = pstmt.getGeneratedKeys();
             if (keys.next()) {
                 int collegeId = keys.getInt(1);
@@ -47,6 +50,8 @@ public class CollegeManager {
     }
 
     public boolean removeCollegeByName(String name) {
+        // Delete college from database by name and remove from in-memory list
+        // SQL: DELETE FROM dbo.College WHERE college_name = ?
         if (connection == null) {
             System.out.println("Database connection not available!");
             return false;
@@ -56,7 +61,7 @@ public class CollegeManager {
         try (PreparedStatement pstmt = connection.prepareStatement(deleteQuery)) {
             pstmt.setString(1, name);
             int rowsAffected = pstmt.executeUpdate();
-            
+            // If deletion successful, remove college from in-memory list
             if (rowsAffected > 0) {
                 colleges.removeIf(c -> c.getName().equalsIgnoreCase(name));
                 return true;
@@ -74,6 +79,7 @@ public class CollegeManager {
     }
 
     public College getCollegeByName(String collegeName) {
+        // Search for college by name (case-insensitive)
         for (College c : colleges) {
             if (c.getName().equalsIgnoreCase(collegeName)) {
                 return c;
@@ -83,6 +89,8 @@ public class CollegeManager {
     }
 
     public ArrayList<College> getCollegesByProgramName(String programName) {
+        // Find all colleges that offer a specific program
+        // Avoid duplicates if program exists in multiple colleges
         ArrayList<College> result = new ArrayList<>();
 
         for (College college : colleges) {
@@ -111,6 +119,8 @@ public class CollegeManager {
 
     // Get all programs that allow a specific stream
     public ArrayList<Program> getProgramsByStream(String stream) {
+        // Filter all programs from all colleges by allowed stream
+        // Prevents duplicate programs across colleges
         ArrayList<Program> result = new ArrayList<>();
 
         for (College college : colleges) {
@@ -141,6 +151,8 @@ public class CollegeManager {
     }
 
     public void loadFromDatabase() {
+        // Load all colleges, programs, and allowed streams from database
+        // SQL: 3-level join: College -> Program -> ProgramStream
         colleges.clear();
 
         if (connection == null) {
@@ -150,9 +162,12 @@ public class CollegeManager {
 
         System.out.println("Loading colleges from database...");
 
-        // Try both possible column name formats (college_id vs CollegeID)
+        // SQL Queries for hierarchical data load
+        // collegeQuery: SELECT all colleges from College table
         String collegeQuery = "SELECT college_id, college_name FROM dbo.College";
+        // programQuery: SELECT all programs for a specific college (filtered by College_ID)
         String programQuery = "SELECT ProgramID, ProgramName, Seats, Eligibility, Fee FROM dbo.Program WHERE College_ID = ?";
+        // streamQuery: SELECT all allowed streams for a specific program via join table
         String streamQuery = "SELECT s.name FROM dbo.ProgramStream ps JOIN dbo.Stream s ON ps.stream_id = s.stream_id WHERE ps.programid = ?";
 
         try (Statement stmt = connection.createStatement();
@@ -161,8 +176,7 @@ public class CollegeManager {
             int collegeCount = 0;
             while (collegeRs.next()) {
                 collegeCount++;
-                
-                // Try both column name formats
+                // Retrieve college ID and name from database
                 int collegeId = collegeRs.getInt("college_id");
                 String collegeName = collegeRs.getString("college_name");
                 
@@ -170,8 +184,7 @@ public class CollegeManager {
                 
                 College college = new College(collegeName);
                 college.setCollegeId(collegeId);
-
-                // Load programs for this college
+                // Load programs associated with this college
                 try (PreparedStatement programStmt = connection.prepareStatement(programQuery)) {
                     programStmt.setInt(1, collegeId);
                     try (ResultSet programRs = programStmt.executeQuery()) {
@@ -184,8 +197,7 @@ public class CollegeManager {
 
                             Program program = new Program(programName, seats, eligibility, fee);
                             program.setProgramId(programId);
-
-                            // Load streams for this program
+                            // Load allowed streams (e.g., Science, Commerce) for this program
                             try (PreparedStatement streamStmt = connection.prepareStatement(streamQuery)) {
                                 streamStmt.setInt(1, programId);
                                 try (ResultSet streamRs = streamStmt.executeQuery()) {

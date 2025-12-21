@@ -19,7 +19,7 @@ public class signUpFrame extends JFrame {
         this.setTitle("Sign Up");
         this.setVisible(true);
 
-        getContentPane().setBackground(Color.LIGHT_GRAY);
+        getContentPane().setBackground(new Color(245, 245, 245));
 
         JLabel title = new JLabel("Colaraz");
         title.setFont(new Font("Tahoma", Font.BOLD, 24));
@@ -33,10 +33,25 @@ public class signUpFrame extends JFrame {
         green.add(title);
         add(green);
 
+        // Beautiful main heading with green background panel
+        JPanel headingPanel = new JPanel();
+        headingPanel.setBackground(new Color(116, 202, 74));
+        headingPanel.setBounds(0, 35, 1300, 100);
+        headingPanel.setLayout(null);
+        
+        JLabel mainHeading = new JLabel("University Admission System");
+        mainHeading.setFont(new Font("Arial", Font.BOLD, 42));
+        mainHeading.setForeground(Color.WHITE);
+        mainHeading.setBounds(150, 15, 1000, 70);
+        mainHeading.setHorizontalAlignment(SwingConstants.CENTER);
+        headingPanel.add(mainHeading);
+
         JLabel title2=new JLabel();
-        title2.setText("Signup");
-        title2.setBounds(600, 80, 100, 40);
-        title2.setFont(new Font("Arial", Font.BOLD, 24));
+        title2.setText("Student Registration");
+        title2.setBounds(0, 160, 1300, 40);
+        title2.setFont(new Font("Arial", Font.BOLD, 32));
+        title2.setForeground(new Color(116, 202, 74));
+        title2.setHorizontalAlignment(SwingConstants.CENTER);
         add(title2);
 
 
@@ -51,22 +66,30 @@ public class signUpFrame extends JFrame {
         JLabel phone = new JLabel("Phone:");
 
         JLabel[] labels = {firstname,lastname,password, security, cnic, dob, gender, phone, email};
-        int y = 170;
+        int y = 230;
         for (JLabel label : labels) {
-            label.setFont(new Font("Times New Roman", Font.ITALIC, 18));
-            label.setBounds(350, y, 250, 20);
+            label.setFont(new Font("Arial", Font.BOLD, 16));
+            label.setForeground(new Color(80, 80, 80));
+            label.setBounds(300, y, 280, 25);
             add(label);
-            y += 40;
+            y += 50;
         }
 
-        JButton backButton = new JButton("Back");
-        backButton.setBounds(10, 40, 70, 25);
+        RoundedButton backButton = new RoundedButton("← Back", 20, 20);
+        backButton.setBounds(15, 145, 100, 38);
+        backButton.setFont(new Font("Arial", Font.BOLD, 15));
+        backButton.setBackground(new Color(80, 80, 80));
+        backButton.setForeground(Color.WHITE);
+        backButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
         this.add(backButton);
 
         backButton.addActionListener(e -> {
             new Myframe();
             dispose();
         });
+
+        add(green);
+        add(headingPanel);
 
         JTextField firstNameField = new JTextField();
         JTextField lastNameField = new JTextField();
@@ -84,15 +107,26 @@ public class signUpFrame extends JFrame {
 
 
         JComponent[] fields = {firstNameField,lastNameField, passwordField, securityField, cnicField, dobField, genderBox, phoneField, emailField};
-        y = 170;
+        y = 230;
         for (JComponent field : fields) {
-            field.setBounds(650, y, 160, 20);
+            field.setBounds(600, y, 380, 35);
+            field.setFont(new Font("Arial", Font.PLAIN, 15));
+            if (field instanceof JTextField || field instanceof JPasswordField) {
+                ((JTextField)field).setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(new Color(180, 180, 180), 2),
+                    BorderFactory.createEmptyBorder(5, 10, 5, 10)
+                ));
+            }
             add(field);
-            y += 40;
+            y += 50;
         }
 
-        JButton enter = new JButton("Enter");
-        enter.setBounds(600, 560, 140, 25);
+        RoundedButton enter = new RoundedButton("Sign Up", 25, 25);
+        enter.setBounds(600, 700, 380, 45);
+        enter.setFont(new Font("Arial", Font.BOLD, 18));
+        enter.setBackground(new Color(116, 202, 74));
+        enter.setForeground(Color.WHITE);
+        enter.setCursor(new Cursor(Cursor.HAND_CURSOR));
         add(enter);
 
 

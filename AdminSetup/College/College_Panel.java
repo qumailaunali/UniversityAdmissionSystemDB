@@ -14,14 +14,17 @@ public class College_Panel extends JPanel {
 
 
     public College_Panel() {
+        // Setup: Create panel for managing colleges (add new, view existing)
         setLayout(new BorderLayout());
         setBackground(COLORAZ_WHITE);
-         addElements();
-         refreshCollegeList();
+        addElements();
+        // Load all colleges from database
+        refreshCollegeList();
     }
 
 
     private void addElements (){
+        // Build UI: title, input field for college name, add button, and list of existing colleges
         JLabel titleLabel = new JLabel("College Management", SwingConstants.CENTER);
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 24));
         titleLabel.setForeground(COLORAZ_BLACK);
@@ -36,7 +39,7 @@ public class College_Panel extends JPanel {
         JLabel nameLabel = new JLabel("Enter College Name:");
         nameLabel.setFont(new Font("Segoe UI", Font.PLAIN, 16));
         nameLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-
+        // Input field for new college name
         collegeNameField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
         collegeNameField.setAlignmentX(Component.LEFT_ALIGNMENT);
 
@@ -45,7 +48,7 @@ public class College_Panel extends JPanel {
         addButton.setBackground(Color.BLACK);
         addButton.setForeground(Color.WHITE);
         addButton.setAlignmentX(Component.LEFT_ALIGNMENT);
-        addButton.addActionListener(e -> handleAddCollege());
+        addButton.addActionListener(e -> handleAddCollege()); // Trigger add college validation
 
         centerPanel.add(nameLabel);
         centerPanel.add(Box.createVerticalStrut(5));
@@ -60,7 +63,7 @@ public class College_Panel extends JPanel {
         listLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         centerPanel.add(listLabel);
         centerPanel.add(Box.createVerticalStrut(5));
-
+        // Display list of colleges loaded from database
         collegeList.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         collegeList.setVisibleRowCount(8);
         JScrollPane scrollPane = new JScrollPane(collegeList);
@@ -72,27 +75,33 @@ public class College_Panel extends JPanel {
 
 
 private void handleAddCollege() {
+    // Validate and add new college: check if empty, verify no duplicates, insert to database
     String collegeName = collegeNameField.getText().trim();
-
+    // Validate required field
     if (collegeName.isEmpty()) {
         JOptionPane.showMessageDialog(this, "Please enter a college name.", "Input Required", JOptionPane.WARNING_MESSAGE);
         return;
     }
-
+    // Check if college name already exists to prevent duplicates
     for (College c : collegeManager.getAllColleges()) {
         if (c.getName().equalsIgnoreCase(collegeName)) {
             JOptionPane.showMessageDialog(this, "This college already exists", "Duplicate Entry", JOptionPane.ERROR_MESSAGE);
             return;
         }
     }
+    // SQL: INSERT INTO dbo.College (CollegeName) VALUES (?)
     collegeManager.addCollege(collegeName);
+    // Refresh the displayed list from database
     refreshCollegeList();
+    // Clear input field for next entry
     collegeNameField.setText("");
     JOptionPane.showMessageDialog(this, "College added successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
 }
 
 
     private void refreshCollegeList() {
+        // Load all colleges from database and update the list display
+        // SQL: SELECT * FROM dbo.College
         collegeListModel.clear();
         for (College c : collegeManager.getAllColleges()) {
             collegeListModel.addElement(c.getName());

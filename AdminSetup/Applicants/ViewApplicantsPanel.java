@@ -3,6 +3,8 @@ package AdminSetup.Applicants;
 import Applicant.ApplicantManager;
 import Applicant.ApplicationFormData;
 import Applicant.Status;
+import Authentication.AdminLogin;
+import Authentication.Admins;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -11,12 +13,15 @@ import javax.swing.table.TableCellEditor;
 import java.awt.*;
 import java.util.ArrayList;
 
+// Panel to display and manage submitted applicant applications
+// Allows admins to approve or reject applications and automatically records the admin ID
 public class ViewApplicantsPanel extends JPanel {
 
     private DefaultTableModel model;
     private JTable table;
 
     public ViewApplicantsPanel() {
+        // Setup: Create table with application data and action buttons for approval/rejection
         setLayout(new BorderLayout());
         setBackground(Color.WHITE);
 
@@ -40,7 +45,7 @@ public class ViewApplicantsPanel extends JPanel {
         table = new JTable(model);
         table.setRowHeight(40);
         table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
-
+        // Load all submitted applications from database
         loadApplicants();
 
         int[] columnWidths = {100, 150, 80, 70, 140, 110, 120, 125, 100, 220};
@@ -53,18 +58,23 @@ public class ViewApplicantsPanel extends JPanel {
 
         table.getColumn("Action").setCellRenderer(new ActionCellRenderer());
         table.getColumn("Action").setCellEditor(new ActionCellEditor(table, model));
-
+        // Add custom renderers/editors for approve/reject buttons
         JScrollPane scrollPane = new JScrollPane(table, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
                 JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
         add(scrollPane, BorderLayout.CENTER);
     }
 
     private void loadApplicants() {
+        // Load all applications from database and populate table rows
+        // SQL: SELECT * FROM ApplicationForm (via ApplicantManager.loadAllApplications())
         model.setRowCount(0);
         try {
+            // Fetch all submitted applications from database
             ArrayList<ApplicationFormData> applicants = ApplicantManager.loadAllApplications();
             for (ApplicationFormData app : applicants) {
+                // Extract fee status (default UNPAID if null)
                 String feeStatus = app.getFeeStatus() != null ? app.getFeeStatus().toString() : "UNPAID";
+                // Extract applicant full name
                 String applicantName = "N/A";
                 if (app.getUsers() != null) {
                     applicantName = app.getUsers().getFirstName() + " " + app.getUsers().getLastName();
@@ -89,6 +99,7 @@ public class ViewApplicantsPanel extends JPanel {
     }
 
     class ColorButton extends JButton {
+        // Custom button with background color that changes on hover/press
         private Color bgColor;
 
         public ColorButton(String text, Color bgColor) {
@@ -102,6 +113,7 @@ public class ViewApplicantsPanel extends JPanel {
 
         @Override
         protected void paintComponent(Graphics g) {
+            // Change color based on button state: pressed (darker), hover (brighter), normal
             if (getModel().isPressed()) {
                 g.setColor(bgColor.darker());
             }
@@ -117,6 +129,8 @@ public class ViewApplicantsPanel extends JPanel {
     }
 
     class ActionCellRenderer extends JPanel implements TableCellRenderer {
+        // Render approve/reject buttons in Action column
+        // Green button for approve, red for reject
         private final JButton btnAccept = new ColorButton("Approve", new Color(76, 175, 80)); // Green
         private final JButton btnReject = new ColorButton("Reject", new Color(244, 67, 54));   // Red
 
@@ -131,7 +145,9 @@ public class ViewApplicantsPanel extends JPanel {
         public Component getTableCellRendererComponent(JTable table, Object value,
                                                        boolean isSelected, boolean hasFocus,
                                                        int row, int column) {
+            // Get current application status from row
             String status = (String) table.getValueAt(row, 7);
+            // Only enable buttons if application is in SUBMITTED status
             boolean enabled = status.equalsIgnoreCase(Status.SUBMITTED.toString());
             btnAccept.setEnabled(enabled);
             btnReject.setEnabled(enabled);
@@ -142,6 +158,7 @@ public class ViewApplicantsPanel extends JPanel {
     }
 
     class ActionCellEditor extends AbstractCellEditor implements TableCellEditor {
+        // Handle approve/reject button clicks and update database
         private JPanel panel;
         private JButton btnAccept;
         private JButton btnReject;
@@ -158,16 +175,26 @@ public class ViewApplicantsPanel extends JPanel {
             panel.add(btnReject);
 
             btnAccept.addActionListener(e -> {
+                // Approve application: get ID, verify status, update database with admin ID, refresh table
                 int row = table.getEditingRow();
                 if (row == -1) return;
 
                 String appId = (String) model.getValueAt(row, 0);
                 try {
+                    // Check current status before update (prevent double-processing)
                     Status status = ApplicantManager.getApplicationStatus(appId);
                     if (status == Status.SUBMITTED) {
-                        ApplicantManager.updateApplicationStatus(appId, Status.APPROVED);
-                        model.setValueAt(Status.APPROVED.toString(), row, 7);
-                        JOptionPane.showMessageDialog(null, "Application ID " + appId + " has been APPROVED.");
+                        // Get current admin who is approving the application
+                        Admins currentAdmin = AdminLogin.getCurrentAdmin();
+                        if (currentAdmin != null) {
+                            // SQL: UPDATE ApplicationForm SET Status = 'APPROVED', AdminID = ? WHERE ApplicationID = ?
+                            ApplicantManager.updateApplicationStatusWithAdmin(appId, Status.APPROVED, currentAdmin.getAdminID());
+                            // Update table display
+                            model.setValueAt(Status.APPROVED.toString(), row, 7);
+                            JOptionPane.showMessageDialog(null, "Application ID " + appId + " has been APPROVED by Admin ID " + currentAdmin.getAdminID());
+                        } else {
+                            JOptionPane.showMessageDialog(null, "Error: No admin session found.");
+                        }
                     }
                     else {
                         JOptionPane.showMessageDialog(null, "Application already processed.");
@@ -182,16 +209,26 @@ public class ViewApplicantsPanel extends JPanel {
             });
 
             btnReject.addActionListener(e -> {
+                // Reject application: get ID, verify status, update database with admin ID, refresh table
                 int row = table.getEditingRow();
                 if (row == -1) return;
 
                 String appId = (String) model.getValueAt(row, 0);
                 try {
+                    // Check current status before update
                     Status status = ApplicantManager.getApplicationStatus(appId);
                     if (status == Status.SUBMITTED) {
-                        ApplicantManager.updateApplicationStatus(appId, Status.REJECTED);
-                        model.setValueAt(Status.REJECTED.toString(), row, 7);
-                        JOptionPane.showMessageDialog(null, "Application ID " + appId + " has been REJECTED.");
+                        // Get current admin who is rejecting the application
+                        Admins currentAdmin = AdminLogin.getCurrentAdmin();
+                        if (currentAdmin != null) {
+                            // SQL: UPDATE ApplicationForm SET Status = 'REJECTED', AdminID = ? WHERE ApplicationID = ?
+                            ApplicantManager.updateApplicationStatusWithAdmin(appId, Status.REJECTED, currentAdmin.getAdminID());
+                            // Update table display
+                            model.setValueAt(Status.REJECTED.toString(), row, 7);
+                            JOptionPane.showMessageDialog(null, "Application ID " + appId + " has been REJECTED by Admin ID " + currentAdmin.getAdminID());
+                        } else {
+                            JOptionPane.showMessageDialog(null, "Error: No admin session found.");
+                        }
                     }
                     else {
                         JOptionPane.showMessageDialog(null, "Application already processed.");

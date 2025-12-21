@@ -2,10 +2,12 @@ package Applicant.Tests;
 
 import AdminSetup.EntryTest.EntryTestRecordManager;
 
-import javax.swing*;
+import javax.swing.*;
+// import java.awt.*;
 
 public class GeneralScienceTest extends JFrame {
     private static int scienceScore;
+    // private EntryTestRecordManager.EntryTestRecord record;
 
     private final String[] questions = {
             "1. What is the boiling point of water?",
@@ -43,6 +45,7 @@ public class GeneralScienceTest extends JFrame {
 
     public GeneralScienceTest(EntryTestRecordManager.EntryTestRecord record) {
         setTitle("General Science Test");
+        // this.record = record;
 
         JPanel contentPanel = new JPanel();
         contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
@@ -79,6 +82,7 @@ public class GeneralScienceTest extends JFrame {
                 }
             }
             scienceScore = score;
+            record.setBiologyTaken(true); // Since biology is being used for science
             JOptionPane.showMessageDialog(this, "Score: " + score + "/10");
         });
 

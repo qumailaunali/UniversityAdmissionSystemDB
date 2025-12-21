@@ -38,7 +38,7 @@ public class AdminLogin {
             return false;
         }
 
-        String query = "SELECT Email, Password, IsSuperAdmin FROM dbo.Admin WHERE Email = ? AND Password = ?";
+        String query = "SELECT AdminID, Email, Password, IsSuperAdmin FROM dbo.Admin WHERE Email = ? AND Password = ?";
 
         try (PreparedStatement stmt = connection.prepareStatement(query)) {
             stmt.setString(1, email);
@@ -46,7 +46,7 @@ public class AdminLogin {
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    Admins admin = new Admins(rs.getString("Email"), rs.getString("Password"));
+                    Admins admin = new Admins(rs.getInt("AdminID"), rs.getString("Email"), rs.getString("Password"));
                     admin.setSuperAdmin(rs.getBoolean("IsSuperAdmin"));
                     setCurrentAdmin(admin);
                     return true;
@@ -108,13 +108,13 @@ public class AdminLogin {
             return;
         }
 
-        String query = "SELECT Email, Password, IsSuperAdmin FROM dbo.Admin";
+        String query = "SELECT AdminID, Email, Password, IsSuperAdmin FROM dbo.Admin";
 
         try (PreparedStatement stmt = connection.prepareStatement(query);
              ResultSet rs = stmt.executeQuery()) {
 
             while (rs.next()) {
-                Admins admin = new Admins(rs.getString("Email"), rs.getString("Password"));
+                Admins admin = new Admins(rs.getInt("AdminID"), rs.getString("Email"), rs.getString("Password"));
                 admin.setSuperAdmin(rs.getBoolean("IsSuperAdmin"));
                 adminsArrayList.add(admin);
             }

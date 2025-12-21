@@ -15,6 +15,7 @@ public class AddAdmin_Panel extends JPanel {
 
 
     public AddAdmin_Panel() {
+        // Setup panel layout and initialize UI components
         setLayout(new BorderLayout());
         setBackground(COLORAZ_WHITE);
         initUI();
@@ -35,13 +36,13 @@ public class AddAdmin_Panel extends JPanel {
 
         JLabel emailLabel = new JLabel("Email:");
         emailLabel.setFont(new Font("Segoe UI", Font.PLAIN, 16));
-        emailField = new JTextField(20);
+        emailField = new JTextField(20); // Email input field
         emailField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
         emailField.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         JLabel passwordLabel = new JLabel("Password:");
         passwordLabel.setFont(new Font("Segoe UI", Font.PLAIN, 16));
-        passwordField = new JPasswordField(20);
+        passwordField = new JPasswordField(20); // Secure password input
         passwordField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
         passwordField.setAlignmentX(Component.LEFT_ALIGNMENT);
 
@@ -51,7 +52,7 @@ public class AddAdmin_Panel extends JPanel {
         addButton.setForeground(COLORAZ_WHITE);
         addButton.setFocusPainted(false);
         addButton.setAlignmentX(Component.LEFT_ALIGNMENT);
-        addButton.addActionListener(e -> handleAddAdmin());
+        addButton.addActionListener(e -> handleAddAdmin()); // Trigger form submission
 
         centerPanel.add(emailLabel);
         centerPanel.add(Box.createVerticalStrut(5));
@@ -67,13 +68,15 @@ public class AddAdmin_Panel extends JPanel {
     }
 
     private void handleAddAdmin() {
+        // Retrieve and trim user input
         String email = emailField.getText().trim();
         String password = new String(passwordField.getPassword()).trim();
-        Admins currentAdmin = AdminLogin.getCurrentAdmin();  // Get the currently logged-in admin
-
+        // Get current admin to verify permissions
+        Admins currentAdmin = AdminLogin.getCurrentAdmin();
+        // Validate and insert to database via AddAdmin class
         String result = addAdmin.setAdmin(currentAdmin, email, password);
 
-
+        // Display validation/operation result messages
         switch (result) {
             case "All fields are required.":
                 JOptionPane.showMessageDialog(this, "Please fill in all fields.", "Missing Information", JOptionPane.WARNING_MESSAGE);
