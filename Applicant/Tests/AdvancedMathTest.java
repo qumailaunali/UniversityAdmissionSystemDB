@@ -99,6 +99,8 @@ public class AdvancedMathTest extends JFrame {
             advMathScore = score;
             record.setAdvMathTaken(true);
             JOptionPane.showMessageDialog(this, "Score: " + score + "/10");
+            dispose();
+            JOptionPane.showMessageDialog(this, "Score: " + score + "/10");
         });
 
         contentPanel.add(submitBtn);

@@ -83,7 +83,6 @@ public class CollegeAndProgramViewer_Panel extends JPanel {
 
                 JPanel collegePanel = collegePanels.computeIfAbsent(collegeId, id -> createCollegePanel(collegeName));
 
-                int programId = rs.getInt("ProgramID");
                 String programName = rs.getString("ProgramName");
                 if (programName == null) {
                     continue; // No program for this college yet

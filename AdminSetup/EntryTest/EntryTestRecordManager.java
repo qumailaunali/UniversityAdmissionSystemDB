@@ -1,13 +1,12 @@
 package AdminSetup.EntryTest;
 
-import java.io.*;
+import java.sql.*;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.List;
 import Applicant.Status;
+import Database.DBConnection;
 
 public class EntryTestRecordManager {
-    private final String FILE_PATH = "EntryTestRecords.txt";
 
     public static class EntryTestRecord {
         private String applicantId;
@@ -138,111 +137,170 @@ public class EntryTestRecordManager {
 
 
     public void saveRecord(EntryTestRecord record) {
-        ArrayList<EntryTestRecord> records = loadAllRecordsIncludingUnpaid();
+        String checkSql = "SELECT COUNT(*) FROM dbo.EntryTestRecord WHERE Application_Form_ID = ?";
+        // Use identity/auto-increment on EntryTestID (omit explicit ID to avoid identity insert errors)
+        String insertSql = """
+            INSERT INTO dbo.EntryTestRecord (Application_Form_ID, TestDateTime, Passed, Score)
+            VALUES (?, ?, ?, ?)
+        """;
+        String updateSql = """
+            UPDATE dbo.EntryTestRecord 
+            SET TestDateTime = ?, Passed = ?, Score = ?
+            WHERE Application_Form_ID = ?
+        """;
 
-        boolean updated = false;
+        String deleteSubjectsSql = "DELETE FROM dbo.EntryTestSubjects WHERE Application_Form_ID = ?";
+        // EntryTestSubjectID assumed identity; omit explicit ID
+        String insertSubjectSql = "INSERT INTO dbo.EntryTestSubjects (Application_Form_ID, SubjectName) VALUES (?, ?)";
 
-        for (int i = 0; i < records.size(); i++) {
-            if (records.get(i).getApplicantId().equals(record.getApplicantId())) {
-                records.set(i, record);
-                updated = true;
-                break;
+        try (Connection con = DBConnection.getConnection()) {
+            // Check if record exists
+            boolean exists = false;
+            try (PreparedStatement checkPs = con.prepareStatement(checkSql)) {
+                checkPs.setInt(1, Integer.parseInt(record.getApplicantId()));
+                try (ResultSet rs = checkPs.executeQuery()) {
+                    if (rs.next() && rs.getInt(1) > 0) {
+                        exists = true;
+                    }
+                }
             }
-        }
 
-        if (!updated) {
-            records.add(record);
-        }
-
-        try (PrintWriter writer = new PrintWriter(new BufferedWriter(new FileWriter(FILE_PATH)))) {
-            for (EntryTestRecord r : records) {
-                writer.println(r.toString());
+            if (exists) {
+                try (PreparedStatement ps = con.prepareStatement(updateSql)) {
+                    Timestamp ts = Timestamp.valueOf(record.getTestDateTime() != null ? record.getTestDateTime() : LocalDateTime.now());
+                    ps.setTimestamp(1, ts);
+                    ps.setBoolean(2, record.isAttempted()); // map attempted -> Passed
+                    ps.setInt(3, record.getScore());
+                    ps.setInt(4, Integer.parseInt(record.getApplicantId()));
+                    ps.executeUpdate();
+                }
+            } else {
+                try (PreparedStatement ps = con.prepareStatement(insertSql)) {
+                    ps.setInt(1, Integer.parseInt(record.getApplicantId()));
+                    Timestamp ts = Timestamp.valueOf(record.getTestDateTime() != null ? record.getTestDateTime() : LocalDateTime.now());
+                    ps.setTimestamp(2, ts);
+                    ps.setBoolean(3, record.isAttempted());
+                    ps.setInt(4, record.getScore());
+                    ps.executeUpdate();
+                }
             }
-        }
 
-        catch (IOException e) {
+            // Replace subjects set
+            try (PreparedStatement delPs = con.prepareStatement(deleteSubjectsSql)) {
+                delPs.setInt(1, Integer.parseInt(record.getApplicantId()));
+                delPs.executeUpdate();
+            }
+            if (record.getSubjects() != null && !record.getSubjects().isEmpty()) {
+                for (String subj : record.getSubjects()) {
+                    try (PreparedStatement insSub = con.prepareStatement(insertSubjectSql)) {
+                        insSub.setInt(1, Integer.parseInt(record.getApplicantId()));
+                        insSub.setString(2, subj);
+                        insSub.executeUpdate();
+                    }
+                }
+            }
+        } catch (SQLException e) {
             System.err.println("Failed to save test records: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
     public EntryTestRecord getRecordById(String applicantId) {
-        ArrayList<EntryTestRecord> records = loadAllRecordsIncludingUnpaid();
+        String sql = """
+            SELECT Application_Form_ID, TestDateTime, Passed, Score
+            FROM dbo.EntryTestRecord
+            WHERE Application_Form_ID = ?
+        """;
 
-        for (EntryTestRecord record : records) {
-            if (record.getApplicantId().equalsIgnoreCase(applicantId)) {
-                return record;
+        String subjectsSql = "SELECT SubjectName FROM dbo.EntryTestSubjects WHERE Application_Form_ID = ?";
+
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setInt(1, Integer.parseInt(applicantId));
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    String appId = String.valueOf(rs.getInt("Application_Form_ID"));
+                    Timestamp timestamp = rs.getTimestamp("TestDateTime");
+                    LocalDateTime dateTime = timestamp != null ? timestamp.toLocalDateTime() : null;
+                    boolean passed = rs.getBoolean("Passed");
+                    int score = rs.getInt("Score");
+
+                    EntryTestRecord record = new EntryTestRecord(appId, dateTime, passed, score);
+
+                    try (PreparedStatement ps2 = con.prepareStatement(subjectsSql)) {
+                        ps2.setInt(1, Integer.parseInt(applicantId));
+                        try (ResultSet rs2 = ps2.executeQuery()) {
+                            ArrayList<String> subjectList = new ArrayList<>();
+                            while (rs2.next()) {
+                                subjectList.add(rs2.getString("SubjectName"));
+                            }
+                            if (!subjectList.isEmpty()) record.setSubjects(subjectList);
+                        }
+                    }
+
+                    return record;
+                }
             }
+        } catch (SQLException e) {
+            System.err.println("Error fetching test record: " + e.getMessage());
+            e.printStackTrace();
         }
+
         return null;
     }
 
 
 
     public ArrayList<EntryTestRecord> loadAllRecords() {
-        ArrayList<EntryTestRecord> all = loadAllRecordsIncludingUnpaid();
-        ArrayList<EntryTestRecord> paidOnly = new ArrayList<>();
-
-        for (EntryTestRecord r : all) {
-            if (AdminSetup.PaymentManager.isFeePaid(r.getApplicantId())) {
-                paidOnly.add(r);
-            }
-        }
-        return paidOnly;
-    }
-
-
-    private ArrayList<EntryTestRecord> loadAllRecordsIncludingUnpaid() {
         ArrayList<EntryTestRecord> list = new ArrayList<>();
-        File file = new File(FILE_PATH);
-        if (!file.exists()) return list;
 
-        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                try {
-                    String[] parts = line.split(",", 5);
-                    if (parts.length < 4) continue;
+        String sql = """
+            SELECT et.Application_Form_ID, et.TestDateTime, et.Passed, et.Score
+            FROM dbo.EntryTestRecord et
+            INNER JOIN dbo.ApplicationForm af ON et.Application_Form_ID = af.application_form_id
+            WHERE af.fee_status = 'PAID'
+        """;
 
-                    String applicantId = parts[0].trim();
-                    String dateTimeStr = parts[1].trim();
-                    LocalDateTime dateTime = null;
+        String subjectsSql = "SELECT SubjectName FROM dbo.EntryTestSubjects WHERE Application_Form_ID = ?";
 
-                    if (!dateTimeStr.equalsIgnoreCase("N/A") &&
-                            !dateTimeStr.equalsIgnoreCase("Not Set") &&
-                            !dateTimeStr.isEmpty()) {
-                        dateTime = LocalDateTime.parse(dateTimeStr);
-                    }
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
 
-                    boolean attempted = Boolean.parseBoolean(parts[2].trim());
-                    int score = Integer.parseInt(parts[3].trim());
+            while (rs.next()) {
+                String appId = String.valueOf(rs.getInt("Application_Form_ID"));
+                Timestamp timestamp = rs.getTimestamp("TestDateTime");
+                LocalDateTime dateTime = timestamp != null ? timestamp.toLocalDateTime() : null;
+                boolean passed = rs.getBoolean("Passed");
+                int score = rs.getInt("Score");
 
-                    EntryTestRecord record = new EntryTestRecord(applicantId, dateTime, attempted, score);
+                EntryTestRecord record = new EntryTestRecord(appId, dateTime, passed, score);
 
-                    if (parts.length == 5) {
-                        String subjectStr = parts[4].trim();
-                        if (!subjectStr.equalsIgnoreCase("Not Set") && !subjectStr.isEmpty()) {
-                            ArrayList<String> subjectList = new ArrayList<>();
-                            for (String sub : subjectStr.split(";")) {
-                                subjectList.add(sub.trim());
-                            }
-                            record.setSubjects(subjectList);
+                try (PreparedStatement ps2 = con.prepareStatement(subjectsSql)) {
+                    ps2.setInt(1, Integer.parseInt(appId));
+                    try (ResultSet rs2 = ps2.executeQuery()) {
+                        ArrayList<String> subjectList = new ArrayList<>();
+                        while (rs2.next()) {
+                            subjectList.add(rs2.getString("SubjectName"));
                         }
+                        if (!subjectList.isEmpty()) record.setSubjects(subjectList);
                     }
-
-                    list.add(record);
-
                 }
-                catch (Exception ex) {
-                    System.err.println("Skipped invalid record: " + line);
-                }
+
+                list.add(record);
             }
-        }
-
-        catch (IOException e) {
-//            System.err.println("Error reading test records: " + e.getMessage());
+        } catch (SQLException e) {
+            System.err.println("Error loading test records: " + e.getMessage());
+            e.printStackTrace();
         }
 
         return list;
     }
+
+
+
+    // Removed unused getNextId() helper after switching to IDENTITY inserts
 
 }

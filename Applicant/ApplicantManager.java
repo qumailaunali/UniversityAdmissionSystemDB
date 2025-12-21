@@ -110,10 +110,12 @@ public class ApplicantManager {
     public static ArrayList<ApplicationFormData> loadAllApplications() {
         ArrayList<ApplicationFormData> applications = new ArrayList<>();
         String sql = """
-            SELECT application_form_id, ApplicantID, email, first_name, last_name, date_of_birth, gender,
-                   twelfth_percentage, twelfth_year, twelfth_stream, university_name, test_schedule,
-                   test_score, status, fee_status, is_submitted, is_scholarship_submitted, programid
-            FROM dbo.ApplicationForm
+            SELECT af.application_form_id, af.ApplicantID, af.email, af.first_name, af.last_name, af.date_of_birth, af.gender,
+                   af.twelfth_percentage, af.twelfth_year, af.twelfth_stream, af.university_name, af.test_schedule,
+                   af.test_score, af.status, af.fee_status, af.is_submitted, af.is_scholarship_submitted, af.programid,
+                   p.ProgramName
+            FROM dbo.ApplicationForm af
+            LEFT JOIN dbo.Program p ON af.programid = p.ProgramID
         """;
 
         try (Connection con = DBConnection.getConnection();
@@ -125,7 +127,7 @@ public class ApplicantManager {
                 String year12 = rs.getObject("twelfth_year") != null ? rs.getObject("twelfth_year").toString() : null;
                 String percent12 = rs.getBigDecimal("twelfth_percentage") != null ? rs.getBigDecimal("twelfth_percentage").toPlainString() : null;
                 String stream12 = rs.getString("twelfth_stream");
-                String selectedProgramName = null; // not stored; can be resolved via join if needed
+                String selectedProgramName = rs.getString("ProgramName");
                 String selectedCollegeName = rs.getString("university_name");
                 String email = rs.getString("email");
                 String statusStr = rs.getString("status");
@@ -188,11 +190,13 @@ public class ApplicantManager {
     public static ArrayList<ApplicationFormData> getApplicationsByUserEmail(String email) {
         ArrayList<ApplicationFormData> apps = new ArrayList<>();
         String sql = """
-            SELECT application_form_id, ApplicantID, email, first_name, last_name, date_of_birth, gender,
-                   twelfth_percentage, twelfth_year, twelfth_stream, university_name, test_schedule,
-                   test_score, status, fee_status, is_submitted, is_scholarship_submitted, programid
-            FROM dbo.ApplicationForm
-            WHERE email = ?
+            SELECT af.application_form_id, af.ApplicantID, af.email, af.first_name, af.last_name, af.date_of_birth, af.gender,
+                   af.twelfth_percentage, af.twelfth_year, af.twelfth_stream, af.university_name, af.test_schedule,
+                   af.test_score, af.status, af.fee_status, af.is_submitted, af.is_scholarship_submitted, af.programid,
+                   p.ProgramName
+            FROM dbo.ApplicationForm af
+            LEFT JOIN dbo.Program p ON af.programid = p.ProgramID
+            WHERE af.email = ?
         """;
 
         try (Connection con = DBConnection.getConnection();
@@ -204,7 +208,7 @@ public class ApplicantManager {
                     String year12 = rs.getObject("twelfth_year") != null ? rs.getObject("twelfth_year").toString() : null;
                     String percent12 = rs.getBigDecimal("twelfth_percentage") != null ? rs.getBigDecimal("twelfth_percentage").toPlainString() : null;
                     String stream12 = rs.getString("twelfth_stream");
-                    String selectedProgramName = null;
+                    String selectedProgramName = rs.getString("ProgramName");
                     String selectedCollegeName = rs.getString("university_name");
                     String statusStr = rs.getString("status");
                     String testSchedule = rs.getDate("test_schedule") != null ? rs.getDate("test_schedule").toString() : null;
@@ -260,10 +264,13 @@ public class ApplicantManager {
     }
     public static ApplicationFormData getApplicationByAppId(String id) {
         String sql = """
-            SELECT application_form_id, ApplicantID, email, first_name, last_name, date_of_birth, gender,
-                   twelfth_percentage, twelfth_year, twelfth_stream, university_name, test_schedule,
-                   test_score, status, fee_status, is_submitted, is_scholarship_submitted, programid
-            FROM dbo.ApplicationForm WHERE application_form_id = ?
+            SELECT af.application_form_id, af.ApplicantID, af.email, af.first_name, af.last_name, af.date_of_birth, af.gender,
+                   af.twelfth_percentage, af.twelfth_year, af.twelfth_stream, af.university_name, af.test_schedule,
+                   af.test_score, af.status, af.fee_status, af.is_submitted, af.is_scholarship_submitted, af.programid,
+                   p.ProgramName
+            FROM dbo.ApplicationForm af
+            LEFT JOIN dbo.Program p ON af.programid = p.ProgramID
+            WHERE af.application_form_id = ?
         """;
 
         try (Connection con = DBConnection.getConnection();
@@ -275,7 +282,7 @@ public class ApplicantManager {
                     String year12 = rs.getObject("twelfth_year") != null ? rs.getObject("twelfth_year").toString() : null;
                     String percent12 = rs.getBigDecimal("twelfth_percentage") != null ? rs.getBigDecimal("twelfth_percentage").toPlainString() : null;
                     String stream12 = rs.getString("twelfth_stream");
-                    String selectedProgramName = null;
+                    String selectedProgramName = rs.getString("ProgramName");
                     String selectedCollegeName = rs.getString("university_name");
                     String email = rs.getString("email");
                     String statusStr = rs.getString("status");
@@ -374,6 +381,23 @@ public class ApplicantManager {
             e.printStackTrace();
         }
         return Status.SUBMITTED; // Default fallback
+    }
+
+    // Persist test schedule on ApplicationForm for admin visibility
+    public static void updateTestSchedule(String applicationId, java.time.LocalDateTime dateTime) {
+        String sql = "UPDATE dbo.ApplicationForm SET test_schedule = ? WHERE application_form_id = ?";
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            if (dateTime != null) {
+                ps.setTimestamp(1, java.sql.Timestamp.valueOf(dateTime));
+            } else {
+                ps.setNull(1, java.sql.Types.TIMESTAMP);
+            }
+            ps.setInt(2, Integer.parseInt(applicationId));
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
     }
 
     public static Status getApplicationStatusByEmail(String email) {

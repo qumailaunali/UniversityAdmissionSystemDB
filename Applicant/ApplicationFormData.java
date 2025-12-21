@@ -142,7 +142,4 @@ public class ApplicationFormData {
     public void setScholarshipSubmitted(boolean scholarshipSubmitted) {
         this.scholarshipSubmitted = scholarshipSubmitted;
     }
-
-
-
 }

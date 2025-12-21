@@ -13,7 +13,7 @@ public class ApplicantDashboard_Panel extends JFrame{
     private JPanel contentPanel;
     private ProgramManager programManager;
     private CollegeManager collegeManager;
-    private ApplicationFormData applicationFormData;
+    // Removed unused field: applicationFormData
 
     private static final Color COLORAZ_BLACK = Color.BLACK;
     private static final Color COLORAZ_SAGE = new Color(180, 195, 180);
@@ -59,7 +59,6 @@ public class ApplicantDashboard_Panel extends JFrame{
                 "Submitted Form List",
                 "View Colleges & Programs",
                 "Payment Portal",
-                "Apply for Scholarship",
 //                "Edit Profile",
                 "Logout"
         };
@@ -119,7 +118,7 @@ public class ApplicantDashboard_Panel extends JFrame{
             case "Submitted Form List" -> showSubmittedFormList();
             case "View Colleges & Programs" -> showCollegeAndProgramViewer();
             case "Payment Portal" -> showPaymentPortal();
-            case "Apply for Scholarship" -> showScholarshipForm();
+            // Scholarship removed from user menu
 //            case "Documents" -> showDocumentsPanel();
 //            case "Edit Profile" -> showEditProfilePanel();
             case "Logout" -> {
@@ -175,13 +174,7 @@ public class ApplicantDashboard_Panel extends JFrame{
     }
 
 
-    private void showScholarshipForm() {
-        ScholarshipForm_Panel scholarshipFormPanel = new ScholarshipForm_Panel(userInfo);
-        contentPanel.removeAll();
-        contentPanel.add(scholarshipFormPanel);
-        contentPanel.revalidate();
-        contentPanel.repaint();
-    }
+    // Scholarship form removed
 
 //    private void showDocumentsPanel() {
 //        DocumentsPanel documentsPanel = new DocumentsPanel(userInfo); // Replace with actual panel

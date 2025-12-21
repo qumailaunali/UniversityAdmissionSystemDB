@@ -5,16 +5,15 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.table.*;
 import java.awt.*;
-import java.awt.event.*;
-import java.io.*;
+import java.sql.*;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import Database.DBConnection;
 
 public class PaymentPortal_Panel extends JPanel {
     private JTable table;
     private DefaultTableModel tableModel;
     private TableRowSorter<DefaultTableModel> sorter;
-    private static final String APPLICATION_FILE = "all_applications.txt";
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd");
     private Applicant userInfo;
 
@@ -80,92 +79,74 @@ public class PaymentPortal_Panel extends JPanel {
 
     private void loadApplications() {
         tableModel.setRowCount(0);
-        boolean foundAny = false;
+        
+        String sql = """
+            SELECT af.application_form_id, af.status, af.fee_status, af.email,
+                   p.ProgramName, af.university_name
+            FROM dbo.ApplicationForm af
+            LEFT JOIN dbo.Program p ON af.programid = p.ProgramID
+            WHERE af.email = ? AND af.status IN ('APPROVED', 'TEST_SCHEDULED', 'PAYMENT_CLEARED')
+        """;
 
-        try (BufferedReader reader = new BufferedReader(new FileReader(APPLICATION_FILE))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                String[] parts = line.split(",");
-                if (parts.length < 18) continue;
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            
+            ps.setString(1, userInfo.getEmail());
+            
+            try (ResultSet rs = ps.executeQuery()) {
+                boolean foundAny = false;
+                
+                while (rs.next()) {
+                    foundAny = true;
+                    
+                    String appId = String.valueOf(rs.getInt("application_form_id"));
+                    String program = rs.getString("ProgramName");
+                    String college = rs.getString("university_name");
+                    String feeStatus = rs.getString("fee_status");
+                    
+                    String dueDate = DATE_FORMAT.format(new Date(System.currentTimeMillis() + 7L * 24 * 60 * 60 * 1000));
+                    String feeStatusDisplay = (feeStatus != null && feeStatus.equalsIgnoreCase("PAID")) ? "Paid" : "Unpaid";
 
-                String appId = parts[0];
-                String email = parts[13];
-                String status = parts[14].toUpperCase();     // Application status
-                String feeStatus = parts[17].toUpperCase();  // Fee status
-
-                if (!userInfo.getEmail().equalsIgnoreCase(email)) continue;
-
-                // Show if application was approved, scheduled, or payment cleared
-                if (!(status.equals("APPROVED") || status.equals("TEST_SCHEDULED") || status.equals("PAYMENT_CLEARED"))) {
-                    continue;
+                    tableModel.addRow(new Object[]{
+                        appId, 
+                        program != null ? program : "N/A", 
+                        college != null ? college : "N/A", 
+                        dueDate, 
+                        feeStatusDisplay, 
+                        "Pay Now"
+                    });
                 }
-
-                foundAny = true;
-
-                String program = parts[11];
-                String college = parts[12];
-                String dueDate = DATE_FORMAT.format(new Date(System.currentTimeMillis() + 7L * 24 * 60 * 60 * 1000));
-                String feeStatusDisplay = feeStatus.equals("PAID") ? "Paid" : "Unpaid";
-
-                tableModel.addRow(new Object[]{appId, program, college, dueDate, feeStatusDisplay, "Pay Now"});
+                
+                if (!foundAny) {
+                    JOptionPane.showMessageDialog(this, "No forms found.", "Info", JOptionPane.INFORMATION_MESSAGE);
+                }
             }
-
-            if (!foundAny) {
-                JOptionPane.showMessageDialog(this, "No forms found.", "Info", JOptionPane.INFORMATION_MESSAGE);
-            }
-        } catch (IOException e) {
+        } catch (SQLException e) {
+            e.printStackTrace();
             JOptionPane.showMessageDialog(this, "Error loading applications: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private void markAsPaid(String appId) {
-        File originalFile = new File(APPLICATION_FILE);
-        File tempFile = new File("all_applications_temp.txt");
-
-        boolean updated = false;
-
-        try (BufferedReader reader = new BufferedReader(new FileReader(originalFile));
-             BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile))) {
-
-            String line;
-            while ((line = reader.readLine()) != null) {
-                String[] parts = line.split(",");
-                if (parts.length < 18) {
-                    writer.write(line);
-                    writer.newLine();
-                    continue;
-                }
-
-                if (parts[0].equals(appId)) {
-                    // ✅ ONLY update fee status
-                    // DO NOT touch parts[14] — this is the application status (e.g. APPROVED)
-
-                    parts[17] = "PAID";        // feeStatus
-                    parts[15] = "N/A";         // extra fee fields, optional
-                    if (parts.length > 16) parts[16] = "N/A";
-
-                    updated = true;
-                    line = String.join(",", parts);
-                }
-
-                writer.write(line);
-                writer.newLine();
+        String sql = "UPDATE dbo.ApplicationForm SET fee_status = ? WHERE application_form_id = ?";
+        
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            
+            ps.setString(1, "PAID");
+            ps.setInt(2, Integer.parseInt(appId));
+            
+            int rowsUpdated = ps.executeUpdate();
+            
+            if (rowsUpdated > 0) {
+                JOptionPane.showMessageDialog(this, "Payment successful! Status updated.");
+                loadApplications();
+            } else {
+                JOptionPane.showMessageDialog(this, "Application not found.", "Info", JOptionPane.INFORMATION_MESSAGE);
             }
-        } catch (IOException e) {
+        } catch (SQLException e) {
+            e.printStackTrace();
             JOptionPane.showMessageDialog(this, "Error updating payment status: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        if (!originalFile.delete() || !tempFile.renameTo(originalFile)) {
-            JOptionPane.showMessageDialog(this, "Error finalizing update.", "Error", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        if (updated) {
-            JOptionPane.showMessageDialog(this, "Payment successful! Status updated.");
-            loadApplications();
-        } else {
-            JOptionPane.showMessageDialog(this, "Application not found or already paid.", "Info", JOptionPane.INFORMATION_MESSAGE);
         }
     }
 //

@@ -202,8 +202,6 @@ public class ProgramPanel extends JPanel {
         }
     }
 
-                // Ensure latest data from DB
-                collegeManager.loadFromDatabase();
     private void loadStreamsFromDatabase() {
         streamDataList.clear();
         streamChecks.clear();
@@ -215,7 +213,6 @@ public class ProgramPanel extends JPanel {
         }
     }
 
-
     private void loadColleges() {
         String selectedCollege = (String) collegeDropdown.getSelectedItem(); // Save current selection
         collegeDropdown.removeAllItems();
@@ -225,33 +222,15 @@ public class ProgramPanel extends JPanel {
         if (selectedCollege != null) {
             collegeDropdown.setSelectedItem(selectedCollege); // Restore selection
         }
-                        // Resolve ProgramID from DB list then remove via DB
-                        List<Program> programs = programManager.getProgramsByCollege(college.getCollegeId());
-                        Program target = null;
-                        for (Program p : programs) {
-                            if (p.getName().equalsIgnoreCase(programName)) {
-                                target = p;
-                                break;
-                            }
-                        }
-                        if (target == null) {
-                            JOptionPane.showMessageDialog(this, "Program not found in database.");
-                            return;
-                        }
+    }
 
-                        boolean removed = programManager.removeProgram(target.getProgramId());
-                        if (removed) {
-                            refreshProgramList();
-                            JOptionPane.showMessageDialog(this, "Program removed.");
-                        } else {
-                            JOptionPane.showMessageDialog(this, "Failed to remove program.");
-                        }
+    private void clearFields() {
+        nameField.setText("");
+        seatsField.setText("");
         eligibilityField.setText("");
         feeField.setText("");
         for (JCheckBox cb : streamChecks) {
             cb.setSelected(false);
         }
-        loadColleges();
-        refreshProgramList();
     }
 }

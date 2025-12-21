@@ -3,8 +3,6 @@ package Authentication;
 import javax.swing.*;
 import java.awt.*;
 
-import Authentication.AdminLoginFrame;
-import Authentication.Myframe;
 
 
 public class MainDashboard extends JFrame {

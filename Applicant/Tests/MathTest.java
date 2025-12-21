@@ -8,7 +8,6 @@ import java.awt.*;
 public class MathTest extends JFrame {
     private static int mathScore;
     private EntryTestRecordManager.EntryTestRecord record;
-    EntryTestRecordManager.EntryTestRecord entryTestRecordManager;
     private String[] questions = {
             "1. What is the value of π (pi) approximately?",
             "2. What is the derivative of x²?",
@@ -92,6 +91,7 @@ public class MathTest extends JFrame {
             mathScore=score;
             record.setMathTaken(true);
             JOptionPane.showMessageDialog(this, "Score: " + score + "/10");
+            dispose();
         });
 
         JScrollPane scrollPane = new JScrollPane(contentPanel);

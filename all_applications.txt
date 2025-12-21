@@ -1,5 +1,0 @@
-APP-FORM-010,Unknown,xyz,12,2022,12,xyx,xy,2024,13,Computer Science,BCS,NUST,amna123@gmail.com,SUBMITTED,null,N/A,UNPAID
-APP-FORM-011,Unknown,12,sffff,2022,12,af,fff,2024,22,Pre-Medical,MBBS,Agha Khan,ahmed12@gmail.com,SUBMITTED,null,N/A,UNPAID
-APP-FORM-015,Unknown,house no,cambridge,1900,77,commerce,Cambridge,1910,99,Pre-Engineering,BCS,NUST,ahmed12@gmail.com,TEST_TAKEN,N/A,N/A,PAID
-APP-FORM-016,Unknown,house no xyz,cambridge,2022,88,commerce,44,2024,44,Pre-Engineering,Accounting and Finance,LUMS,ahmed12@gmail.com,ADMISSION_OFFERED,N/A,N/A,PAID
-APP-FORM-017,Unknown,house no 66,cambridge,2022,88,commerce,cambridge,2024,88,Pre-Engineering,BS EE,GIKI,ahmed12@gmail.com,APPROVED,N/A,N/A,PAID

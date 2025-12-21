@@ -26,15 +26,14 @@ public class ViewApplicantsPanel extends JPanel {
         add(title, BorderLayout.NORTH);
 
         String[] columns = {
-                "Application ID", "10th Board", "10th Year", "10th %", "10th Stream",
-                "12th Board", "12th Year", "12th %", "12th Stream",
-                "Program", "College", "Status", "Action"
+                "Application ID", "Applicant Name", "12th Year", "12th %", "12th Stream",
+                "Program", "College", "Status", "Fee Status", "Action"
         };
 
         model = new DefaultTableModel(columns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
-                return column == 12; // Only "Action" column editable
+                return column == 9; // Only "Action" column editable
             }
         };
 
@@ -44,7 +43,7 @@ public class ViewApplicantsPanel extends JPanel {
 
         loadApplicants();
 
-        int[] columnWidths = {100, 90, 80, 70, 90, 90, 80, 80, 140, 110, 120, 125, 220};
+        int[] columnWidths = {100, 150, 80, 70, 140, 110, 120, 125, 100, 220};
         for (int i = 0; i < columnWidths.length; i++) {
             if (i < table.getColumnModel().getColumnCount()) {
                 table.getColumnModel().getColumn(i).setPreferredWidth(columnWidths[i]);
@@ -65,19 +64,21 @@ public class ViewApplicantsPanel extends JPanel {
         try {
             ArrayList<ApplicationFormData> applicants = ApplicantManager.loadAllApplications();
             for (ApplicationFormData app : applicants) {
+                String feeStatus = app.getFeeStatus() != null ? app.getFeeStatus().toString() : "UNPAID";
+                String applicantName = "N/A";
+                if (app.getUsers() != null) {
+                    applicantName = app.getUsers().getFirstName() + " " + app.getUsers().getLastName();
+                }
                 model.addRow(new Object[]{
                         app.getApplicationId(),
-                        app.getBoard10(),
-                        app.getYear10(),
-                        app.getPercent10(),
-                        app.getStream10(),
-                        app.getBoard12(),
+                        applicantName,
                         app.getYear12(),
                         app.getPercent12(),
                         app.getStream12(),
                         app.getSelectedProgram() != null ? app.getSelectedProgram() : "N/A",
                         app.getSelectedCollege() != null ? app.getSelectedCollege() : "N/A",
                         app.getStatus().toString(),
+                        feeStatus,
                         "Action"
                 });
             }
@@ -130,7 +131,7 @@ public class ViewApplicantsPanel extends JPanel {
         public Component getTableCellRendererComponent(JTable table, Object value,
                                                        boolean isSelected, boolean hasFocus,
                                                        int row, int column) {
-            String status = (String) table.getValueAt(row, 11);
+            String status = (String) table.getValueAt(row, 7);
             boolean enabled = status.equalsIgnoreCase(Status.SUBMITTED.toString());
             btnAccept.setEnabled(enabled);
             btnReject.setEnabled(enabled);
@@ -144,11 +145,9 @@ public class ViewApplicantsPanel extends JPanel {
         private JPanel panel;
         private JButton btnAccept;
         private JButton btnReject;
-        private JTable table;
         private DefaultTableModel model;
 
         public ActionCellEditor(JTable table, DefaultTableModel model) {
-            this.table = table;
             this.model = model;
 
             btnAccept = new ColorButton("Approve", new Color(76, 175, 80)); // Green
@@ -167,7 +166,7 @@ public class ViewApplicantsPanel extends JPanel {
                     Status status = ApplicantManager.getApplicationStatus(appId);
                     if (status == Status.SUBMITTED) {
                         ApplicantManager.updateApplicationStatus(appId, Status.APPROVED);
-                        model.setValueAt(Status.APPROVED.toString(), row, 11);
+                        model.setValueAt(Status.APPROVED.toString(), row, 7);
                         JOptionPane.showMessageDialog(null, "Application ID " + appId + " has been APPROVED.");
                     }
                     else {
@@ -191,7 +190,7 @@ public class ViewApplicantsPanel extends JPanel {
                     Status status = ApplicantManager.getApplicationStatus(appId);
                     if (status == Status.SUBMITTED) {
                         ApplicantManager.updateApplicationStatus(appId, Status.REJECTED);
-                        model.setValueAt(Status.REJECTED.toString(), row, 11);
+                        model.setValueAt(Status.REJECTED.toString(), row, 7);
                         JOptionPane.showMessageDialog(null, "Application ID " + appId + " has been REJECTED.");
                     }
                     else {
@@ -210,7 +209,7 @@ public class ViewApplicantsPanel extends JPanel {
         @Override
         public Component getTableCellEditorComponent(JTable table, Object value,
                                                      boolean isSelected, int row, int column) {
-            String status = (String) model.getValueAt(row, 11);
+            String status = (String) model.getValueAt(row, 7);
             boolean submitted = status.equalsIgnoreCase(Status.SUBMITTED.toString());
             btnAccept.setEnabled(submitted);
             btnReject.setEnabled(submitted);

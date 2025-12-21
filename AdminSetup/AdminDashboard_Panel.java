@@ -2,11 +2,9 @@ package AdminSetup;
 
 import AdminSetup.AddAdmin.AddAdmin_Panel;
 import AdminSetup.Applicants.ViewApplicantsPanel;
-import AdminSetup.College.CollegeManager;
 import AdminSetup.College.College_Panel;
 import AdminSetup.EntryTest.EntryTestRecordManager;
 import AdminSetup.EntryTest.SetTestDatePanel;
-import AdminSetup.Program.ProgramManager;
 import AdminSetup.Program.ProgramPanel;
 import Authentication.LoginFrame;
 import javax.swing.*;
@@ -14,17 +12,12 @@ import java.awt.*;
 
 public class AdminDashboard_Panel extends JFrame {
     private JPanel contentPanel;
-    private ProgramManager programManager;
-    private CollegeManager collegeManager;
 
     private static final Color COLORAZ_BLACK = Color.BLACK;
     private static final Color COLORAZ_SAGE = new Color(180, 195, 180);
     private static final Color COLORAZ_WHITE = new Color(255, 255, 255);
 
-    public AdminDashboard_Panel(ProgramManager programManager, CollegeManager collegeManager) {
-        this.programManager = programManager;
-        this.collegeManager = collegeManager;
-
+    public AdminDashboard_Panel() {
         setupFrame();
         initUI();
     }
@@ -60,7 +53,6 @@ public class AdminDashboard_Panel extends JFrame {
                 "View Program",
                 "Set Test",
                 "Add Admin",
-                "Scholarship Applications",
                 "Logout"
         };
 

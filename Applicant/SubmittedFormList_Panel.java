@@ -5,13 +5,11 @@ import Applicant.Tests.AdvancedMathTest;
 import Applicant.Tests.BioTest;
 import Applicant.Tests.EnglishTest;
 import Applicant.Tests.MathTest;
-import com.sun.tools.javac.Main;
 
 import javax.swing.*;
 import javax.swing.table.*;
 import java.awt.*;
 import java.awt.event.*;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -34,11 +32,17 @@ public class SubmittedFormList_Panel extends JPanel {
         searchField = new JTextField();
         searchField.setToolTipText("Search by Application No., Program or College");
 
-        JLabel title = new JLabel("Submitted Applications Record", SwingConstants.CENTER);
+        // Header with title and refresh
+        JPanel headerBar = new JPanel(new BorderLayout());
+        JLabel title = new JLabel("Submitted Applications Record", SwingConstants.LEFT);
         title.setFont(new Font("Segoe UI", Font.BOLD, 22));
         title.setForeground(Color.BLACK);
+        JButton refreshBtn = new JButton("Refresh");
+        refreshBtn.addActionListener(e -> refreshApplications());
+        headerBar.add(title, BorderLayout.WEST);
+        headerBar.add(refreshBtn, BorderLayout.EAST);
 
-        searchPanel.add(title, BorderLayout.NORTH);
+        searchPanel.add(headerBar, BorderLayout.NORTH);
         searchPanel.add(searchField, BorderLayout.CENTER);
         add(searchPanel, BorderLayout.NORTH);
 
@@ -99,6 +103,18 @@ public class SubmittedFormList_Panel extends JPanel {
         add(new JScrollPane(table), BorderLayout.CENTER);
     }
 
+    private void refreshApplications() {
+        try {
+            this.userApplications = new ArrayList<>(ApplicantManager.getApplicationsByUserEmail(userInfo.getEmail()));
+            model.setRowCount(0);
+            if (userApplications != null) {
+                populateTable(userApplications);
+            }
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Failed to refresh applications.", "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
     private void populateTable(ArrayList<ApplicationFormData> applications) {
         for (ApplicationFormData app : applications) {
             addRow(app);
@@ -118,8 +134,11 @@ public class SubmittedFormList_Panel extends JPanel {
             if (testDate != null) {
                 schedule = testDate.format(DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a"));
 
-                if (LocalDate.now().equals(testDate.toLocalDate())) {
+                // Allow taking test on or after the scheduled date (and if not already attempted)
+                if (!recordById.isAttempted() && !testDate.isAfter(LocalDateTime.now())) {
                     actionText = "Give Test Now";
+                } else {
+                    actionText = "Scheduled";
                 }
             }
 
@@ -144,17 +163,7 @@ public class SubmittedFormList_Panel extends JPanel {
     }
 
 
-    private boolean isToday(String dateTimeStr) {
-        if (dateTimeStr == null || dateTimeStr.equalsIgnoreCase("null") || dateTimeStr.equalsIgnoreCase("N/A"))
-            return false;
-        try {
-            LocalDateTime dateTime = LocalDateTime.parse(dateTimeStr, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-            return LocalDate.now().equals(dateTime.toLocalDate());
-        } catch (Exception e) {
-            System.err.println("Date parsing error: " + e.getMessage());
-            return false;
-        }
-    }
+
 
 
     private String formatCombinedStatus(Status status, FeeStatus feeStatus) {
@@ -262,6 +271,12 @@ public class SubmittedFormList_Panel extends JPanel {
                 EntryTestRecordManager entryTestRecordManager = new EntryTestRecordManager();
                 EntryTestRecordManager.EntryTestRecord record = entryTestRecordManager.getRecordById(selectedApp.getApplicationId());
 
+                if (record == null || record.getSubjects() == null || record.getSubjects().isEmpty()) {
+                    JOptionPane.showMessageDialog(null, "Test details are not available yet. Please contact admin.");
+                    isPushed = false;
+                    return label;
+                }
+
                 JFrame frame = new JFrame("Start Your Test");
                 frame.setSize(500, 350);
                 frame.setLocationRelativeTo(null);
@@ -286,7 +301,6 @@ public class SubmittedFormList_Panel extends JPanel {
                             englishBtn.setEnabled(!record.isEnglishTaken());
                             englishBtn.addActionListener(e -> {
                                 new EnglishTest(record);
-                                record.setEnglishTaken(true);
                                 checkAllSubjectsCompleted(record);
                                 englishBtn.setEnabled(false);
                             });
@@ -294,8 +308,7 @@ public class SubmittedFormList_Panel extends JPanel {
                         case "biology" -> {
                             bioBtn.setEnabled(!record.isBiologyTaken());
                             bioBtn.addActionListener(e -> {
-                                new BioTest();
-                                record.setBiologyTaken(true);
+                                new BioTest(record);
                                 checkAllSubjectsCompleted(record);
                                 bioBtn.setEnabled(false);
                             });
@@ -305,7 +318,6 @@ public class SubmittedFormList_Panel extends JPanel {
                             addMathBtn.setEnabled(!record.isAdvMathTaken());
                             addMathBtn.addActionListener(e -> {
                                 new AdvancedMathTest(record);
-                                record.setAdvMathTaken(true);
                                 checkAllSubjectsCompleted(record);
                                 addMathBtn.setEnabled(false);
                             });
@@ -314,7 +326,6 @@ public class SubmittedFormList_Panel extends JPanel {
                             mathBtn.setEnabled(!record.isMathTaken());
                             mathBtn.addActionListener(e -> {
                                 new MathTest(record);
-                                record.setMathTaken(true);
                                 checkAllSubjectsCompleted(record);
                                 mathBtn.setEnabled(false);
                             });
@@ -378,10 +389,10 @@ public class SubmittedFormList_Panel extends JPanel {
                 total += MathTest.getMathScore();
             }
             if (testRecord.isBiologyTaken()) {
-                total += BioTest.getBioMarks();  // Make sure this method exists
+                total += BioTest.getBioMarks();
             }
             if (testRecord.isAdvMathTaken()) {
-                total += 20; // Or call: AdvancedMathTest.getScore() if available
+                total += AdvancedMathTest.getAdvMathScore();
             }
 
             return total;

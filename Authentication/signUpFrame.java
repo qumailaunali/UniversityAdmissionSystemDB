@@ -7,7 +7,6 @@ import java.awt.*;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.time.LocalDate;
-import java.util.ArrayList;
 
 public class signUpFrame extends JFrame {
     UserSignup signup = new UserSignup();

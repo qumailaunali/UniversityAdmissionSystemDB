@@ -96,6 +96,7 @@ public class EnglishTest extends JFrame {
             record.setEnglishTaken(true);
 
             JOptionPane.showMessageDialog(this, "Score: " + score + "/10");
+            dispose();
         });
 
         JScrollPane scrollPane = new JScrollPane(contentPanel);

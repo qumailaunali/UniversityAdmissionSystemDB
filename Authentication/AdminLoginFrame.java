@@ -1,7 +1,6 @@
 package Authentication;
 import AdminSetup.*;
-import AdminSetup.College.CollegeManager;
-import AdminSetup.Program.ProgramManager;
+
 
 import javax.swing.*;
 import java.awt.*;
@@ -9,7 +8,7 @@ import java.awt.*;
 public class AdminLoginFrame extends JFrame{
     AdminLogin adminLogin = new AdminLogin();
     public AdminLoginFrame(){
-
+        setLayout(null); // use absolute positioning for manually set bounds
         getContentPane().setBackground(Color.LIGHT_GRAY);
         JLabel title = new JLabel("Colaraz");
         title.setFont(new Font("Tahoma", Font.BOLD, 24));
@@ -41,11 +40,11 @@ public class AdminLoginFrame extends JFrame{
         password.setBounds(375, 240, 220, 40);
 
         JTextField emailField;
-        JTextField passwordField;
+        JPasswordField passwordField;
 
         emailField= new JTextField();
         emailField.setBounds(650, 170, 180, 25);
-        passwordField = new JTextField();
+        passwordField = new JPasswordField();
         passwordField.setBounds(650, 250, 180, 25);
 
         JButton Enter ;
@@ -56,8 +55,6 @@ public class AdminLoginFrame extends JFrame{
         this.setSize(1300, 900);
         this.setLocationRelativeTo(null);
         this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        this.setLayout(null);
-        this.setVisible(true);
         this.add(title2);
         this.add(username);
         this.add(password);
@@ -76,16 +73,14 @@ public class AdminLoginFrame extends JFrame{
 
         Enter.addActionListener(e -> {
             String Username = emailField.getText();
-            String Password = passwordField.getText();
+            String Password = new String(passwordField.getPassword());
 
             boolean success = adminLogin.login(Username,Password);
 
 
             if(success){
                 dispose();
-                ProgramManager programManager= new ProgramManager();
-                CollegeManager collegeManager= new CollegeManager();
-                AdminDashboard_Panel adminDashboardPanel= new AdminDashboard_Panel(programManager,collegeManager);
+                AdminDashboard_Panel adminDashboardPanel= new AdminDashboard_Panel();
                 adminDashboardPanel.setVisible(true);
 
 
@@ -96,6 +91,8 @@ public class AdminLoginFrame extends JFrame{
             adminLogin.saveAdmin();
 
         });
+
+        this.setVisible(true);
 
     }
 

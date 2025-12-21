@@ -1,0 +1,11 @@
+# Java build artifacts
+*.class
+
+# Common build output directories
+out/
+bin/
+target/
+
+# IDE files
+/.idea/
+/.vscode/

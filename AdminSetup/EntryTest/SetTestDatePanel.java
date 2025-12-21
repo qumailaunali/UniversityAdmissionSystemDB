@@ -25,20 +25,26 @@ public class SetTestDatePanel extends JPanel {
         setLayout(new BorderLayout());
         setBackground(Color.WHITE);
 
+        // Header with title and refresh button
+        JPanel header = new JPanel(new BorderLayout());
         JLabel title = new JLabel("Set Entry Test Date, Time & Subjects");
         title.setFont(new Font("Segoe UI", Font.BOLD, 22));
-        title.setHorizontalAlignment(SwingConstants.CENTER);
-        add(title, BorderLayout.NORTH);
+        title.setHorizontalAlignment(SwingConstants.LEFT);
+        JButton refreshBtn = new JButton("Refresh");
+        refreshBtn.addActionListener(e -> loadTestData());
+        header.add(title, BorderLayout.WEST);
+        header.add(refreshBtn, BorderLayout.EAST);
+        add(header, BorderLayout.NORTH);
 
         String[] columns = {
-                "Applicant ID", "Program", "12th Stream", "Test Date & Time",
+                "Applicant ID", "Applicant Name", "Program", "12th Stream", "Test Date & Time",
                 "Attempted", "Score", "Subjects", "Action", "Decision"
         };
 
         model = new DefaultTableModel(columns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
-                return column == 7 || column == 8;
+                return column == 8 || column == 9;
             }
         };
 
@@ -53,14 +59,15 @@ public class SetTestDatePanel extends JPanel {
 
         TableColumnModel columnModel = table.getColumnModel();
         columnModel.getColumn(0).setPreferredWidth(100); // ID
-        columnModel.getColumn(1).setPreferredWidth(100); // Program
-        columnModel.getColumn(2).setPreferredWidth(100); // Stream
-        columnModel.getColumn(3).setPreferredWidth(150); // Date & Time
-        columnModel.getColumn(4).setPreferredWidth(80);  // Attempted
-        columnModel.getColumn(5).setPreferredWidth(60);  // Score
-        columnModel.getColumn(6).setPreferredWidth(150); // Subjects
-        columnModel.getColumn(7).setPreferredWidth(180); // Action buttons
-        columnModel.getColumn(8).setPreferredWidth(180); // Decision buttons
+        columnModel.getColumn(1).setPreferredWidth(150); // Applicant Name
+        columnModel.getColumn(2).setPreferredWidth(100); // Program
+        columnModel.getColumn(3).setPreferredWidth(100); // Stream
+        columnModel.getColumn(4).setPreferredWidth(150); // Date & Time
+        columnModel.getColumn(5).setPreferredWidth(80);  // Attempted
+        columnModel.getColumn(6).setPreferredWidth(60);  // Score
+        columnModel.getColumn(7).setPreferredWidth(150); // Subjects
+        columnModel.getColumn(8).setPreferredWidth(180); // Action buttons
+        columnModel.getColumn(9).setPreferredWidth(180); // Decision buttons
 
         JScrollPane scrollPane = new JScrollPane(table);
         add(scrollPane, BorderLayout.CENTER);
@@ -92,9 +99,14 @@ public class SetTestDatePanel extends JPanel {
             ApplicationFormData appData = ApplicantManager.getApplicationByAppId(id);
             String program = appData != null ? appData.getSelectedProgram() : "N/A";
             String stream = appData != null ? appData.getStream12() : "N/A";
+            String applicantName = "N/A";
+            if (appData != null && appData.getUsers() != null) {
+                applicantName = appData.getUsers().getFirstName() + " " + appData.getUsers().getLastName();
+            }
 
             model.addRow(new Object[]{
                     record.getApplicantId(),
+                    applicantName,
                     program,
                     stream,
                     record.getTestDateTime() != null ? record.getTestDateTime().format(formatter) : "Not Set",
@@ -163,8 +175,8 @@ public class SetTestDatePanel extends JPanel {
                         record.setTestDateTime(dateTime);
                     }
 
-                    ApplicationFormData applicationFormData = ApplicantManager.getApplicationByAppId(applicantId);
-                    applicationFormData.setTestSchedule(dateTime.toString());
+                    // Persist schedule on ApplicationForm for visibility
+                    ApplicantManager.updateTestSchedule(applicantId, dateTime);
 
                     recordManager.saveRecord(record);
                     ApplicantManager.updateApplicationStatus(applicantId, Status.TEST_SCHEDULED);
@@ -188,7 +200,8 @@ public class SetTestDatePanel extends JPanel {
                 String applicantId = (String) model.getValueAt(editingRow, 0);
 
                 JPanel inputPanel = new JPanel(new GridLayout(0, 1));
-                String[] subjectOptions = {"Math", "Add Maths", "English", "Biology"};
+                // Align subject labels with applicant-side checks
+                String[] subjectOptions = {"Math", "Advanced Math", "English", "Biology"};
                 List<JCheckBox> checkBoxes = new ArrayList<>();
 
                 for (String subject : subjectOptions) {

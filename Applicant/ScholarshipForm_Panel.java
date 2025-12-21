@@ -2,7 +2,6 @@ package Applicant;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.*;
 import java.io.*;
 
 public class ScholarshipForm_Panel extends JPanel {

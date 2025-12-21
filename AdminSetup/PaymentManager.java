@@ -1,35 +1,29 @@
 package AdminSetup;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
+import java.sql.*;
+import Database.DBConnection;
 
 public class PaymentManager {
-    private static final String APPLICATION_FILE = "all_applications.txt";
 
     public static boolean isFeePaid(String applicantId) {
-        try (BufferedReader reader = new BufferedReader(new FileReader(APPLICATION_FILE))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                String[] parts = line.split(",");
-
-                if (parts.length < 18) continue;
-
-                String id = parts[0].trim();
-                String feeStatus = parts[17].trim();
-
-                if (id.equalsIgnoreCase(applicantId)) {
-                    return feeStatus.equalsIgnoreCase("PAID");
+        String sql = "SELECT fee_status FROM dbo.ApplicationForm WHERE application_form_id = ?";
+        
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            
+            ps.setInt(1, Integer.parseInt(applicantId));
+            
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    String feeStatus = rs.getString("fee_status");
+                    return feeStatus != null && feeStatus.equalsIgnoreCase("PAID");
                 }
             }
-        }
-
-        catch (IOException e) {
+        } catch (SQLException e) {
             e.printStackTrace();
         }
+        
         return false;
     }
-
-
 
 }
