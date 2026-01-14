@@ -23,26 +23,22 @@ public class CollegeManager {
     }
 
     public void addCollege(String name) {
-        // Insert new college into database and add to in-memory list
-        // SQL: INSERT INTO dbo.College (college_name) VALUES (?)
+        // Insert new college into database using stored procedure and add to in-memory list
         if (connection == null) {
             System.out.println("Database connection not available!");
             return;
         }
 
-        String insertQuery = "INSERT INTO dbo.College (college_name) VALUES (?)";
-        try (PreparedStatement pstmt = connection.prepareStatement(insertQuery, Statement.RETURN_GENERATED_KEYS)) {
-            pstmt.setString(1, name);
-            pstmt.executeUpdate();
-            // Retrieve auto-generated college ID from database
-            ResultSet keys = pstmt.getGeneratedKeys();
-            if (keys.next()) {
-                int collegeId = keys.getInt(1);
-                College college = new College(name);
-                college.setCollegeId(collegeId);
-                colleges.add(college);
-            }
-            keys.close();
+        String procedureCall = "{call sp_InsertCollege(?, ?)}";
+        try (CallableStatement cs = connection.prepareCall(procedureCall)) {
+            cs.setString(1, name);  // Input parameter: college name
+            cs.registerOutParameter(2, Types.INTEGER);  // Output parameter: college ID
+            cs.execute();
+            // Retrieve auto-generated college ID from output parameter
+            int collegeId = cs.getInt(2);
+            College college = new College(name);
+            college.setCollegeId(collegeId);
+            colleges.add(college);
         } catch (SQLException e) {
             System.out.println("Error adding college to database!");
             e.printStackTrace();
@@ -50,17 +46,18 @@ public class CollegeManager {
     }
 
     public boolean removeCollegeByName(String name) {
-        // Delete college from database by name and remove from in-memory list
-        // SQL: DELETE FROM dbo.College WHERE college_name = ?
+        // Delete college from database using stored procedure and remove from in-memory list
         if (connection == null) {
             System.out.println("Database connection not available!");
             return false;
         }
 
-        String deleteQuery = "DELETE FROM dbo.College WHERE college_name = ?";
-        try (PreparedStatement pstmt = connection.prepareStatement(deleteQuery)) {
-            pstmt.setString(1, name);
-            int rowsAffected = pstmt.executeUpdate();
+        String procedureCall = "{call sp_DeleteCollegeByName(?, ?)}";
+        try (CallableStatement cs = connection.prepareCall(procedureCall)) {
+            cs.setString(1, name);  // Input parameter: college name
+            cs.registerOutParameter(2, Types.INTEGER);  // Output parameter: rows affected
+            cs.execute();
+            int rowsAffected = cs.getInt(2);
             // If deletion successful, remove college from in-memory list
             if (rowsAffected > 0) {
                 colleges.removeIf(c -> c.getName().equalsIgnoreCase(name));
@@ -162,63 +159,60 @@ public class CollegeManager {
 
         System.out.println("Loading colleges from database...");
 
-        // SQL Queries for hierarchical data load
-        // collegeQuery: SELECT all colleges from College table
-        String collegeQuery = "SELECT college_id, college_name FROM dbo.College";
-        // programQuery: SELECT all programs for a specific college (filtered by College_ID)
-        String programQuery = "SELECT ProgramID, ProgramName, Seats, Eligibility, Fee FROM dbo.Program WHERE College_ID = ?";
-        // streamQuery: SELECT all allowed streams for a specific program via join table
-        String streamQuery = "SELECT s.name FROM dbo.ProgramStream ps JOIN dbo.Stream s ON ps.stream_id = s.stream_id WHERE ps.programid = ?";
+        // Use view to fetch all colleges with their programs and streams in one query
+        String viewQuery = "SELECT * FROM dbo.vw_CollegesProgramsStreams ORDER BY college_id, ProgramID";
 
         try (Statement stmt = connection.createStatement();
-             ResultSet collegeRs = stmt.executeQuery(collegeQuery)) {
+             ResultSet rs = stmt.executeQuery(viewQuery)) {
 
-            int collegeCount = 0;
-            while (collegeRs.next()) {
-                collegeCount++;
-                // Retrieve college ID and name from database
-                int collegeId = collegeRs.getInt("college_id");
-                String collegeName = collegeRs.getString("college_name");
+            College currentCollege = null;
+            Program currentProgram = null;
+            int lastCollegeId = -1;
+            int lastProgramId = -1;
+
+            while (rs.next()) {
+                int collegeId = rs.getInt("college_id");
+                String collegeName = rs.getString("college_name");
                 
-                System.out.println("Loading college: " + collegeName + " (ID: " + collegeId + ")");
-                
-                College college = new College(collegeName);
-                college.setCollegeId(collegeId);
-                // Load programs associated with this college
-                try (PreparedStatement programStmt = connection.prepareStatement(programQuery)) {
-                    programStmt.setInt(1, collegeId);
-                    try (ResultSet programRs = programStmt.executeQuery()) {
-                        while (programRs.next()) {
-                            int programId = programRs.getInt("ProgramID");
-                            String programName = programRs.getString("ProgramName");
-                            int seats = programRs.getInt("Seats");
-                            int eligibility = programRs.getInt("Eligibility");
-                            double fee = programRs.getDouble("Fee");
-
-                            Program program = new Program(programName, seats, eligibility, fee);
-                            program.setProgramId(programId);
-                            // Load allowed streams (e.g., Science, Commerce) for this program
-                            try (PreparedStatement streamStmt = connection.prepareStatement(streamQuery)) {
-                                streamStmt.setInt(1, programId);
-                                try (ResultSet streamRs = streamStmt.executeQuery()) {
-                                    while (streamRs.next()) {
-                                        String streamName = streamRs.getString("StreamName");
-                                        program.addAllowedStream(streamName);
-                                    }
-                                }
-                            }
-
-                            college.addProgram(program);
-                        }
-                    } catch (SQLException e) {
-                        System.out.println("Error loading programs for college " + collegeName + ": " + e.getMessage());
+                // Create new college if we encounter a different college ID
+                if (collegeId != lastCollegeId) {
+                    if (currentCollege != null) {
+                        colleges.add(currentCollege);
                     }
+                    System.out.println("Loading college: " + collegeName + " (ID: " + collegeId + ")");
+                    currentCollege = new College(collegeName);
+                    currentCollege.setCollegeId(collegeId);
+                    lastCollegeId = collegeId;
+                    lastProgramId = -1;
                 }
 
-                colleges.add(college);
+                // Get program data (may be null if college has no programs)
+                Integer programId = (Integer) rs.getObject("ProgramID");
+                if (programId != null && programId != lastProgramId) {
+                    String programName = rs.getString("ProgramName");
+                    int seats = rs.getInt("Seats");
+                    int eligibility = rs.getInt("Eligibility");
+                    double fee = rs.getDouble("Fee");
+
+                    currentProgram = new Program(programName, seats, eligibility, fee);
+                    currentProgram.setProgramId(programId);
+                    currentCollege.addProgram(currentProgram);
+                    lastProgramId = programId;
+                }
+
+                // Add stream to current program (may be null if program has no streams)
+                String streamName = rs.getString("StreamName");
+                if (streamName != null && currentProgram != null) {
+                    currentProgram.addAllowedStream(streamName);
+                }
             }
 
-            System.out.println("Successfully loaded " + collegeCount + " colleges from database!");
+            // Add the last college to the list
+            if (currentCollege != null) {
+                colleges.add(currentCollege);
+            }
+
+            System.out.println("Successfully loaded " + colleges.size() + " colleges from database!");
             System.out.println("Total colleges in memory: " + colleges.size());
 
         } catch (SQLException e) {

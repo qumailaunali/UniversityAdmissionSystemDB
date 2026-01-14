@@ -59,16 +59,11 @@ public class CollegeAndProgramViewer_Panel extends JPanel {
     private void loadCollegeData(String query) {
         resultPanel.removeAll();
 
+        // Use view to fetch college, program, and stream data with aggregated streams
         String sql = """
-            SELECT c.college_id, c.college_name,
-                   p.ProgramID, p.ProgramName, p.Seats, p.Eligibility, p.Fee,
-                   STRING_AGG(s.name, ', ') AS streams
-            FROM dbo.College c
-            LEFT JOIN dbo.Program p ON p.College_ID = c.college_id
-            LEFT JOIN dbo.ProgramStream ps ON ps.programid = p.ProgramID
-            LEFT JOIN dbo.Stream s ON s.stream_id = ps.stream_id
-            GROUP BY c.college_id, c.college_name, p.ProgramID, p.ProgramName, p.Seats, p.Eligibility, p.Fee
-            ORDER BY c.college_name, p.ProgramName
+            SELECT college_id, college_name, ProgramID, ProgramName, Seats, Eligibility, Fee, streams
+            FROM dbo.vw_CollegesProgramsAggregated
+            ORDER BY college_name, ProgramName
         """;
 
         Map<Integer, JPanel> collegePanels = new LinkedHashMap<>();

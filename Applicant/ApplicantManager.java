@@ -15,52 +15,44 @@ import java.util.List;
 public class ApplicantManager {
 
     // Insert new application form into database and return generated application ID
-    // Maps ApplicationFormData to database columns and resolves program ID from college/program names
+    // Uses stored procedure to insert new application record
     public static int saveApplication(ApplicationFormData app) {
-        // SQL to INSERT new application record with all applicant and academic information
-        String sql = """
-            INSERT INTO dbo.ApplicationForm (
-                ApplicantID, AdminID, email, first_name, last_name, date_of_birth, gender,
-                twelfth_percentage, twelfth_year, twelfth_stream,
-                university_name, test_schedule, test_score, status, fee_status,
-                is_submitted, is_scholarship_submitted, programid
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """;
+        String procedureCall = "{call sp_InsertApplication(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
 
         try (Connection con = DBConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
+             java.sql.CallableStatement cs = con.prepareCall(procedureCall)) {
 
             // Bind applicant ID (from Users object or null if not set)
             if (app.getUsers() != null) {
-                ps.setInt(1, app.getUsers().getApplicantID());
+                cs.setInt(1, app.getUsers().getApplicantID());
             } else {
-                ps.setNull(1, java.sql.Types.INTEGER);
+                cs.setNull(1, java.sql.Types.INTEGER);
             }
-            ps.setObject(2, (Object) null); // AdminID optional (not assigned at creation)
-            ps.setString(3, app.getEmail());  // Bind email address
-            ps.setString(4, app.getUsers().getFirstName());  // Bind first name
-            ps.setString(5, app.getUsers().getLastName());   // Bind last name
+            cs.setNull(2, java.sql.Types.INTEGER); // AdminID optional (not assigned at creation)
+            cs.setString(3, app.getEmail());  // Bind email address
+            cs.setString(4, app.getUsers().getFirstName());  // Bind first name
+            cs.setString(5, app.getUsers().getLastName());   // Bind last name
             // Convert LocalDate to SQL Date for database storage
-            ps.setDate(6, app.getUsers().getDateOfBirth() != null ? java.sql.Date.valueOf(app.getUsers().getDateOfBirth()) : null);
+            cs.setDate(6, app.getUsers().getDateOfBirth() != null ? java.sql.Date.valueOf(app.getUsers().getDateOfBirth()) : null);
             // Convert Gender enum to string for database
-            ps.setString(7, app.getUsers().getGender() != null ? app.getUsers().getGender().name() : null);
+            cs.setString(7, app.getUsers().getGender() != null ? app.getUsers().getGender().name() : null);
 
             // Bind 12th grade percentage as decimal
-            ps.setBigDecimal(8, app.getPercent12() != null && !app.getPercent12().isEmpty() ? new java.math.BigDecimal(app.getPercent12()) : null);
+            cs.setBigDecimal(8, app.getPercent12() != null && !app.getPercent12().isEmpty() ? new java.math.BigDecimal(app.getPercent12()) : null);
             // Bind 12th grade year as integer
-            ps.setObject(9, app.getYear12() != null && !app.getYear12().isEmpty() ? Integer.parseInt(app.getYear12()) : null, java.sql.Types.INTEGER);
-            ps.setString(10, app.getStream12());  // Bind 12th stream (Science/Commerce/Arts)
+            cs.setObject(9, app.getYear12() != null && !app.getYear12().isEmpty() ? Integer.parseInt(app.getYear12()) : null, java.sql.Types.INTEGER);
+            cs.setString(10, app.getStream12());  // Bind 12th stream (Science/Commerce/Arts)
 
-            ps.setString(11, app.getSelectedCollege());  // Bind selected college name
-            ps.setDate(12, null);  // test_schedule not set at application creation
+            cs.setString(11, app.getSelectedCollege());  // Bind selected college name
+            cs.setNull(12, java.sql.Types.TIMESTAMP);  // test_schedule not set at application creation
             // Bind test score if provided
-            ps.setObject(13, app.getTestScore() != null && !app.getTestScore().isEmpty() ? Integer.parseInt(app.getTestScore()) : null, java.sql.Types.INTEGER);
+            cs.setObject(13, app.getTestScore() != null && !app.getTestScore().isEmpty() ? Integer.parseInt(app.getTestScore()) : null, java.sql.Types.INTEGER);
             // Bind application status (default SUBMITTED)
-            ps.setString(14, app.getStatus() != null ? app.getStatus().name() : Status.SUBMITTED.name());
+            cs.setString(14, app.getStatus() != null ? app.getStatus().name() : Status.SUBMITTED.name());
             // Bind fee status (default UNPAID)
-            ps.setString(15, app.getFeeStatus() != null ? app.getFeeStatus().name() : FeeStatus.UNPAID.name());
-            ps.setBoolean(16, app.isSubmitted());  // Bind submission flag
-            ps.setBoolean(17, app.isScholarshipSubmitted());  // Bind scholarship form submission flag
+            cs.setString(15, app.getFeeStatus() != null ? app.getFeeStatus().name() : FeeStatus.UNPAID.name());
+            cs.setBoolean(16, app.isSubmitted());  // Bind submission flag
+            cs.setBoolean(17, app.isScholarshipSubmitted());  // Bind scholarship form submission flag
 
             // Resolve program ID from program name and college name via lookup
             Integer programId = null;
@@ -69,18 +61,18 @@ public class ApplicantManager {
             }
             // Bind program ID (null if not resolved)
             if (programId == null) {
-                ps.setNull(18, java.sql.Types.INTEGER);
+                cs.setNull(18, java.sql.Types.INTEGER);
             } else {
-                ps.setInt(18, programId);
+                cs.setInt(18, programId);
             }
+            
+            // Register output parameter for auto-generated application ID
+            cs.registerOutParameter(19, java.sql.Types.INTEGER);
+            cs.execute();
+            
+            // Return the auto-generated application form ID
+            return cs.getInt(19);
 
-            ps.executeUpdate();
-            // Retrieve and return the auto-generated application form ID
-            try (ResultSet rs = ps.getGeneratedKeys()) {
-                if (rs.next()) {
-                    return rs.getInt(1);
-                }
-            }
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -88,16 +80,9 @@ public class ApplicantManager {
     }
 
 
-    // Check if applicant has already applied for the same program
+    // Check if applicant has already applied for the same program using stored procedure
     // Prevents duplicate applications for the same program-applicant combination
     public boolean hasAppliedBefore(ApplicationFormData newApp) {
-        // SQL to check if record exists with matching ApplicantID and ProgramID
-        String sql = """
-            SELECT 1
-            FROM dbo.ApplicationForm
-            WHERE ApplicantID = ? AND programid = ?
-        """;
-
         // Resolve program ID from program name and college name
         Integer programId = null;
         if (newApp.getSelectedProgram() != null && newApp.getSelectedCollege() != null) {
@@ -108,19 +93,21 @@ public class ApplicantManager {
             return false;
         }
 
+        String procedureCall = "{call sp_CheckDuplicateApplication(?, ?, ?)}";
         try (Connection con = DBConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql)) {
+             java.sql.CallableStatement cs = con.prepareCall(procedureCall)) {
             // Bind applicant ID (null if not set)
             if (newApp.getUsers() != null) {
-                ps.setInt(1, newApp.getUsers().getApplicantID());
+                cs.setInt(1, newApp.getUsers().getApplicantID());
             } else {
-                ps.setNull(1, java.sql.Types.INTEGER);
+                cs.setNull(1, java.sql.Types.INTEGER);
             }
-            ps.setInt(2, programId);  // Bind program ID for lookup
-            try (ResultSet rs = ps.executeQuery()) {
-                // Return true if at least one record found (has applied before)
-                return rs.next();
-            }
+            cs.setInt(2, programId);  // Bind program ID for lookup
+            cs.registerOutParameter(3, java.sql.Types.BIT);  // Register output parameter
+            cs.execute();
+            
+            // Return true if at least one record found (has applied before)
+            return cs.getBoolean(3);
         } catch (SQLException e) {
             e.printStackTrace();
             return false;
@@ -131,15 +118,9 @@ public class ApplicantManager {
     // Load all applications from database with associated program and user data
     public static ArrayList<ApplicationFormData> loadAllApplications() {
         ArrayList<ApplicationFormData> applications = new ArrayList<>();
-        // SQL to fetch all application records with LEFT JOIN to Program table to get program names
-        String sql = """
-            SELECT af.application_form_id, af.ApplicantID, af.email, af.first_name, af.last_name, af.date_of_birth, af.gender,
-                   af.twelfth_percentage, af.twelfth_year, af.twelfth_stream, af.university_name, af.test_schedule,
-                   af.test_score, af.status, af.fee_status, af.is_submitted, af.is_scholarship_submitted, af.programid,
-                   p.ProgramName
-            FROM dbo.ApplicationForm af
-            LEFT JOIN dbo.Program p ON af.programid = p.ProgramID
-        """;
+        // Use view to fetch all application records with program information
+        // vw_AllApplications: Joins ApplicationForm with Program table
+        String sql = "SELECT * FROM dbo.vw_AllApplications";
 
         try (Connection con = DBConnection.getConnection();
              PreparedStatement ps = con.prepareStatement(sql);
@@ -218,19 +199,11 @@ public class ApplicantManager {
     }
 
 
-    // Retrieve all applications by applicant email address
+    // Retrieve all applications by applicant email address using view
     public static ArrayList<ApplicationFormData> getApplicationsByUserEmail(String email) {
         ArrayList<ApplicationFormData> apps = new ArrayList<>();
-        // SQL to fetch applications filtered by email with LEFT JOIN to Program table
-        String sql = """
-            SELECT af.application_form_id, af.ApplicantID, af.email, af.first_name, af.last_name, af.date_of_birth, af.gender,
-                   af.twelfth_percentage, af.twelfth_year, af.twelfth_stream, af.university_name, af.test_schedule,
-                   af.test_score, af.status, af.fee_status, af.is_submitted, af.is_scholarship_submitted, af.programid,
-                   p.ProgramName
-            FROM dbo.ApplicationForm af
-            LEFT JOIN dbo.Program p ON af.programid = p.ProgramID
-            WHERE af.email = ?
-        """;
+        // Use view with WHERE filter to fetch applications by email
+        String sql = "SELECT * FROM dbo.vw_AllApplications WHERE email = ?";
 
         try (Connection con = DBConnection.getConnection();
              PreparedStatement ps = con.prepareStatement(sql)) {
@@ -305,18 +278,10 @@ public class ApplicantManager {
         return apps;
     }
 
-    // Retrieve single application by application form ID
+    // Retrieve single application by application form ID using view
     public static ApplicationFormData getApplicationByAppId(String id) {
-        // SQL to fetch single application record by ID with LEFT JOIN to Program table
-        String sql = """
-            SELECT af.application_form_id, af.ApplicantID, af.email, af.first_name, af.last_name, af.date_of_birth, af.gender,
-                   af.twelfth_percentage, af.twelfth_year, af.twelfth_stream, af.university_name, af.test_schedule,
-                   af.test_score, af.status, af.fee_status, af.is_submitted, af.is_scholarship_submitted, af.programid,
-                   p.ProgramName
-            FROM dbo.ApplicationForm af
-            LEFT JOIN dbo.Program p ON af.programid = p.ProgramID
-            WHERE af.application_form_id = ?
-        """;
+        // Use view with WHERE filter to fetch single application by ID
+        String sql = "SELECT * FROM dbo.vw_AllApplications WHERE application_form_id = ?";
 
         try (Connection con = DBConnection.getConnection();
              PreparedStatement ps = con.prepareStatement(sql)) {
@@ -391,15 +356,14 @@ public class ApplicantManager {
         return null;  // Return null if application not found
     }
 
-    // Update application status to new value in database
+    // Update application status to new value using stored procedure
     public static void updateApplicationStatus(String applicationId, Status newStatus) {
-        // SQL to UPDATE status field for specific application
-        String sql = "UPDATE dbo.ApplicationForm SET status = ? WHERE application_form_id = ?";
+        String procedureCall = "{call sp_UpdateApplicationStatusOnly(?, ?)}";
         try (Connection con = DBConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setString(1, newStatus.name());        // Bind new status as enum name
-            ps.setInt(2, Integer.parseInt(applicationId));  // Bind application ID for WHERE clause
-            ps.executeUpdate();
+             java.sql.CallableStatement cs = con.prepareCall(procedureCall)) {
+            cs.setInt(1, Integer.parseInt(applicationId));  // Bind application ID parameter
+            cs.setString(2, newStatus.name());              // Bind new status as enum name
+            cs.execute();
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -408,14 +372,14 @@ public class ApplicantManager {
     // Update application status and admin ID (called when admin approves/rejects application)
     // Persists both the new status and the admin who made the decision
     public static void updateApplicationStatusWithAdmin(String applicationId, Status newStatus, int adminId) {
-        // SQL to UPDATE both status and AdminID fields for specific application
-        String sql = "UPDATE dbo.ApplicationForm SET status = ?, AdminID = ? WHERE application_form_id = ?";
+        // Use stored procedure to UPDATE both status and AdminID fields for specific application
+        String procedureCall = "{call sp_UpdateApplicationStatus(?, ?, ?)}";
         try (Connection con = DBConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setString(1, newStatus.name());        // Bind new status as enum name
-            ps.setInt(2, adminId);                    // Bind admin ID who made this decision
-            ps.setInt(3, Integer.parseInt(applicationId));  // Bind application ID for WHERE clause
-            ps.executeUpdate();
+             java.sql.CallableStatement cs = con.prepareCall(procedureCall)) {
+            cs.setInt(1, Integer.parseInt(applicationId));  // Bind application ID parameter
+            cs.setString(2, newStatus.name());              // Bind new status as enum name
+            cs.setInt(3, adminId);                          // Bind admin ID who made this decision
+            cs.execute();
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -439,20 +403,22 @@ public class ApplicantManager {
         return ids;
     }
 
-    // Retrieve application status by application ID
+    // Retrieve application status by application ID using stored procedure
     public static Status getApplicationStatus(String applicationId) {
-        // SQL to fetch status value for specific application
-        String sql = "SELECT status FROM dbo.ApplicationForm WHERE application_form_id = ?";
+        // Use stored procedure with output parameter to fetch status value
+        String procedureCall = "{call sp_GetApplicationStatus(?, ?)}";
         try (Connection con = DBConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setInt(1, Integer.parseInt(applicationId));  // Bind application ID parameter
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next() && rs.getString("status") != null) {
-                    // Convert status string to Status enum
-                    try {
-                        return Status.valueOf(rs.getString("status").toUpperCase());
-                    } catch (IllegalArgumentException ignored) {}
-                }
+             java.sql.CallableStatement cs = con.prepareCall(procedureCall)) {
+            cs.setInt(1, Integer.parseInt(applicationId));  // Bind application ID parameter
+            cs.registerOutParameter(2, java.sql.Types.NVARCHAR);  // Register output parameter for status
+            cs.execute();
+            
+            String statusStr = cs.getString(2);  // Get output parameter value
+            if (statusStr != null) {
+                // Convert status string to Status enum
+                try {
+                    return Status.valueOf(statusStr.toUpperCase());
+                } catch (IllegalArgumentException ignored) {}
             }
         } catch (SQLException e) {
             e.printStackTrace();
@@ -460,21 +426,20 @@ public class ApplicantManager {
         return Status.SUBMITTED;  // Return SUBMITTED as default fallback if not found or error
     }
 
-    // Persist test schedule date/time on ApplicationForm for admin visibility
+    // Update test schedule using stored procedure
     // Called when admin sets test date/time via SetTestDatePanel
     public static void updateTestSchedule(String applicationId, java.time.LocalDateTime dateTime) {
-        // SQL to UPDATE test_schedule field with date/time value
-        String sql = "UPDATE dbo.ApplicationForm SET test_schedule = ? WHERE application_form_id = ?";
+        String procedureCall = "{call sp_UpdateTestSchedule(?, ?)}";
         try (Connection con = DBConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql)) {
+             java.sql.CallableStatement cs = con.prepareCall(procedureCall)) {
+            cs.setInt(1, Integer.parseInt(applicationId));  // Bind application ID parameter
             // Convert LocalDateTime to SQL Timestamp for database storage
             if (dateTime != null) {
-                ps.setTimestamp(1, java.sql.Timestamp.valueOf(dateTime));
+                cs.setTimestamp(2, java.sql.Timestamp.valueOf(dateTime));
             } else {
-                ps.setNull(1, java.sql.Types.TIMESTAMP);  // Set null if no date provided
+                cs.setNull(2, java.sql.Types.TIMESTAMP);  // Set null if no date provided
             }
-            ps.setInt(2, Integer.parseInt(applicationId));  // Bind application ID for WHERE clause
-            ps.executeUpdate();
+            cs.execute();
         } catch (SQLException e) {
             e.printStackTrace();
         }

@@ -14,82 +14,47 @@ public class ProgramManager {
     public ProgramManager() {
     }
 
-    // Add new academic program to database with multiple associated streams
-    // Uses transaction to ensure atomicity: insert program first, then associate streams
+    // Add new academic program to database with multiple associated streams using stored procedure
     public boolean addProgram(String name, int seats, int eligibility, double fees, int collegeId, List<Integer> streamIds) {
-        // SQL to INSERT new program record with college association
-        String insertProgram = """
-            INSERT INTO dbo.Program (ProgramName, College_ID, Seats, Eligibility, Fee)
-            VALUES (?, ?, ?, ?, ?)
-        """;
-        
-        // SQL to INSERT program-stream associations (many-to-many relationship)
-        String insertProgramStream = """
-            INSERT INTO dbo.ProgramStream (programid, stream_id)
-            VALUES (?, ?)
-        """;
+        String procedureCall = "{call sp_AddProgram(?, ?, ?, ?, ?, ?, ?)}";
 
-        try (Connection con = DBConnection.getConnection()) {
-            con.setAutoCommit(false);  // Disable auto-commit for transaction management
+        try (Connection con = DBConnection.getConnection();
+             CallableStatement cs = con.prepareCall(procedureCall)) {
+
+            // Bind input parameters
+            cs.setString(1, name);                // Program name
+            cs.setInt(2, collegeId);              // College ID
+            cs.setInt(3, seats);                  // Available seats
+            cs.setInt(4, eligibility);            // Eligibility criteria
+            cs.setDouble(5, fees);                // Program fees
             
-            try (PreparedStatement psProgram = con.prepareStatement(insertProgram, Statement.RETURN_GENERATED_KEYS);
-                 PreparedStatement psProgramStream = con.prepareStatement(insertProgramStream)) {
-
-                // Step 1: Insert program record with provided details (name, college, seats, eligibility, fees)
-                psProgram.setString(1, name);           // Bind program name
-                psProgram.setInt(2, collegeId);         // Bind college ID foreign key
-                psProgram.setInt(3, seats);             // Bind available seats in program
-                psProgram.setInt(4, eligibility);       // Bind eligibility criteria (12th score cutoff)
-                psProgram.setDouble(5, fees);           // Bind program fees
-                psProgram.executeUpdate();
-
-                // Step 2: Retrieve auto-generated ProgramID from database identity column
-                int programId;
-                try (ResultSet rs = psProgram.getGeneratedKeys()) {
-                    if (rs.next()) {
-                        programId = rs.getInt(1);  // Get generated program ID
-                    } else {
-                        throw new SQLException("Failed to get ProgramID");
-                    }
-                }
-
-                // Step 3: Insert stream associations (batch insert for efficiency)
-                for (int streamId : streamIds) {
-                    psProgramStream.setInt(1, programId);  // Bind program ID
-                    psProgramStream.setInt(2, streamId);   // Bind stream ID (Science, Commerce, etc.)
-                    psProgramStream.addBatch();            // Add to batch for bulk insert
-                }
-                psProgramStream.executeBatch();  // Execute all stream inserts as a batch
-
-                con.commit();  // Commit transaction if all operations succeed
-                return true;
-                
-            } catch (SQLException ex) {
-                con.rollback();  // Rollback all changes if any error occurs
-                throw ex;
-            } finally {
-                con.setAutoCommit(true);  // Re-enable auto-commit for normal operation
+            // Convert stream IDs list to comma-separated string
+            String streamIdsStr = "";
+            if (streamIds != null && !streamIds.isEmpty()) {
+                streamIdsStr = streamIds.stream()
+                    .map(String::valueOf)
+                    .reduce((a, b) -> a + "," + b)
+                    .orElse("");
             }
+            cs.setString(6, streamIdsStr);        // Comma-separated stream IDs
+            
+            // Register output parameter for generated program ID
+            cs.registerOutParameter(7, Types.INTEGER);
+            
+            cs.execute();
+            return true;
+            
         } catch (SQLException e) {
             e.printStackTrace();
             return false;
         }
     }
 
-    // Retrieve all programs offered by a specific college with their stream information
+    // Retrieve all programs offered by a specific college using view
     public ArrayList<Program> getProgramsByCollege(int collegeId) {
         ArrayList<Program> programs = new ArrayList<>();
-        // SQL with LEFT JOIN to get programs and associated streams even if no streams exist
-        // STRING_AGG aggregates multiple streams into comma-separated list per program
-        String query = """
-            SELECT p.ProgramID, p.ProgramName, p.Seats, p.Eligibility, p.Fee,
-                   STRING_AGG(s.name, ', ') as streams
-            FROM dbo.Program p
-            LEFT JOIN dbo.ProgramStream ps ON p.ProgramID = ps.programid
-            LEFT JOIN dbo.Stream s ON ps.stream_id = s.stream_id
-            WHERE p.College_ID = ?
-            GROUP BY p.ProgramID, p.ProgramName, p.Seats, p.Eligibility, p.Fee
-        """;
+        // Use view with WHERE filter to get programs by college
+        String query = "SELECT ProgramID, ProgramName, Seats, Eligibility, Fee, streams FROM dbo.vw_ProgramsWithStreams WHERE College_ID = ?";
 
         try (Connection con = DBConnection.getConnection();
              PreparedStatement ps = con.prepareStatement(query)) {
@@ -124,18 +89,11 @@ public class ProgramManager {
         return programs;
     }
 
-    // Retrieve all programs from database regardless of college, with stream associations
+    // Retrieve all programs from database using view
     public ArrayList<Program> getAllPrograms() {
         ArrayList<Program> programs = new ArrayList<>();
-        // SQL to fetch all programs with their associated streams using aggregation and joins
-        String query = """
-            SELECT p.ProgramID, p.ProgramName, p.Seats, p.Eligibility, p.Fee,
-                   STRING_AGG(s.name, ', ') as streams
-            FROM dbo.Program p
-            LEFT JOIN dbo.ProgramStream ps ON p.ProgramID = ps.programid
-            LEFT JOIN dbo.Stream s ON ps.stream_id = s.stream_id
-            GROUP BY p.ProgramID, p.ProgramName, p.Seats, p.Eligibility, p.Fee
-        """;
+        // Use view to fetch all programs with aggregated streams
+        String query = "SELECT ProgramID, ProgramName, Seats, Eligibility, Fee, streams FROM dbo.vw_ProgramsWithStreams";
 
         try (Connection con = DBConnection.getConnection();
              Statement stmt = con.createStatement();
@@ -168,16 +126,18 @@ public class ProgramManager {
         return programs;
     }
 
-    // Delete program from database (cascade deletes associated program-stream records)
+    // Delete program from database using stored procedure
     public boolean removeProgram(int programId) {
-        // SQL to DELETE program record by ID (foreign key constraints may cascade delete)
-        String query = "DELETE FROM dbo.Program WHERE ProgramID = ?";
+        String procedureCall = "{call sp_RemoveProgram(?, ?)}";
 
         try (Connection con = DBConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement(query)) {
+             CallableStatement cs = con.prepareCall(procedureCall)) {
             
-            ps.setInt(1, programId);  // Bind program ID to delete
-            int rowsAffected = ps.executeUpdate();  // Execute deletion
+            cs.setInt(1, programId);  // Bind program ID to delete
+            cs.registerOutParameter(2, Types.INTEGER);  // Register output for rows affected
+            cs.execute();
+            
+            int rowsAffected = cs.getInt(2);
             return rowsAffected > 0;  // Return true if at least one row was deleted
         } catch (SQLException e) {
             e.printStackTrace();
@@ -185,17 +145,11 @@ public class ProgramManager {
         }
     }
 
-    // Retrieve all programs that are available for a specific educational stream (Science/Commerce/etc.)
+    // Retrieve all programs available for a specific educational stream using view
     public ArrayList<Program> getProgramsByStream(String streamName) {
         ArrayList<Program> programs = new ArrayList<>();
-        // SQL with INNER JOIN to get programs associated with specific stream via ProgramStream table
-        String query = """
-            SELECT p.ProgramID, p.ProgramName, p.Seats, p.Eligibility, p.Fee
-            FROM dbo.Program p
-            JOIN dbo.ProgramStream ps ON p.ProgramID = ps.programid
-            JOIN dbo.Stream s ON ps.stream_id = s.stream_id
-            WHERE s.name = ?
-        """;
+        // Use view with WHERE filter to get programs by stream
+        String query = "SELECT ProgramID, ProgramName, Seats, Eligibility, Fee FROM dbo.vw_ProgramsByStream WHERE StreamName = ?";
 
         try (Connection con = DBConnection.getConnection();
              PreparedStatement ps = con.prepareStatement(query)) {

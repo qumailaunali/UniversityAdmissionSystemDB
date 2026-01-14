@@ -143,78 +143,29 @@ public class EntryTestRecordManager {
     }
 
 
-    // Save or update a test record: insert new record or update existing one, manage associated subjects
+    // Save or update a test record using stored procedure
     public void saveRecord(EntryTestRecord record) {
-        // SQL to check if test record already exists for this applicant
-        String checkSql = "SELECT COUNT(*) FROM dbo.EntryTestRecord WHERE Application_Form_ID = ?";
-        // SQL to INSERT new test record with auto-increment EntryTestID (omit ID to let database generate)
-        String insertSql = """
-            INSERT INTO dbo.EntryTestRecord (Application_Form_ID, TestDateTime, Passed, Score)
-            VALUES (?, ?, ?, ?)
-        """;
-        // SQL to UPDATE existing test record with new date/time and score
-        String updateSql = """
-            UPDATE dbo.EntryTestRecord 
-            SET TestDateTime = ?, Passed = ?, Score = ?
-            WHERE Application_Form_ID = ?
-        """;
+        String procedureCall = "{call sp_SaveEntryTestRecord(?, ?, ?, ?, ?)}";
 
-        // SQL to DELETE all existing subjects for this applicant (to refresh with new list)
-        String deleteSubjectsSql = "DELETE FROM dbo.EntryTestSubjects WHERE Application_Form_ID = ?";
-        // SQL to INSERT individual subject records (EntryTestSubjectID auto-incremented)
-        String insertSubjectSql = "INSERT INTO dbo.EntryTestSubjects (Application_Form_ID, SubjectName) VALUES (?, ?)";
+        try (Connection con = DBConnection.getConnection();
+             java.sql.CallableStatement cs = con.prepareCall(procedureCall)) {
 
-        try (Connection con = DBConnection.getConnection()) {
-            // Check if test record already exists for this applicant
-            boolean exists = false;
-            try (PreparedStatement checkPs = con.prepareStatement(checkSql)) {
-                // Bind applicant ID parameter to check if record exists
-                checkPs.setInt(1, Integer.parseInt(record.getApplicantId()));
-                try (ResultSet rs = checkPs.executeQuery()) {
-                    if (rs.next() && rs.getInt(1) > 0) {
-                        exists = true;  // Record found, will use UPDATE
-                    }
-                }
-            }
-
-            if (exists) {
-                // Record exists, UPDATE it with new test date/time, pass status, and score
-                try (PreparedStatement ps = con.prepareStatement(updateSql)) {
-                    // Convert test date/time to SQL Timestamp format
-                    Timestamp ts = Timestamp.valueOf(record.getTestDateTime() != null ? record.getTestDateTime() : LocalDateTime.now());
-                    ps.setTimestamp(1, ts);                                           // Bind test date/time
-                    ps.setBoolean(2, record.isAttempted());                           // Bind attempt status (mapped to Passed column)
-                    ps.setInt(3, record.getScore());                                  // Bind test score
-                    ps.setInt(4, Integer.parseInt(record.getApplicantId()));          // Bind applicant ID for WHERE clause
-                    ps.executeUpdate();
-                }
-            } else {
-                // Record doesn't exist, INSERT new test record
-                try (PreparedStatement ps = con.prepareStatement(insertSql)) {
-                    ps.setInt(1, Integer.parseInt(record.getApplicantId()));          // Bind applicant ID
-                    Timestamp ts = Timestamp.valueOf(record.getTestDateTime() != null ? record.getTestDateTime() : LocalDateTime.now());
-                    ps.setTimestamp(2, ts);                                           // Bind test date/time
-                    ps.setBoolean(3, record.isAttempted());                           // Bind attempt status
-                    ps.setInt(4, record.getScore());                                  // Bind test score
-                    ps.executeUpdate();
-                }
-            }
-
-            // Replace subjects: DELETE old ones and INSERT updated list
-            try (PreparedStatement delPs = con.prepareStatement(deleteSubjectsSql)) {
-                delPs.setInt(1, Integer.parseInt(record.getApplicantId()));  // Delete all subjects for this applicant
-                delPs.executeUpdate();
-            }
-            // INSERT all new subjects if the list is not empty
+            // Bind parameters
+            cs.setInt(1, Integer.parseInt(record.getApplicantId()));  // Application Form ID
+            Timestamp ts = Timestamp.valueOf(record.getTestDateTime() != null ? record.getTestDateTime() : LocalDateTime.now());
+            cs.setTimestamp(2, ts);                                   // Test date/time
+            cs.setBoolean(3, record.isAttempted());                   // Passed status
+            cs.setInt(4, record.getScore());                          // Score
+            
+            // Convert subject list to comma-separated string
+            String subjects = "";
             if (record.getSubjects() != null && !record.getSubjects().isEmpty()) {
-                for (String subj : record.getSubjects()) {
-                    try (PreparedStatement insSub = con.prepareStatement(insertSubjectSql)) {
-                        insSub.setInt(1, Integer.parseInt(record.getApplicantId()));  // Bind applicant ID
-                        insSub.setString(2, subj);                                     // Bind subject name (English, Math, etc.)
-                        insSub.executeUpdate();
-                    }
-                }
+                subjects = String.join(",", record.getSubjects());
             }
+            cs.setString(5, subjects);                                // Comma-separated subjects
+            
+            cs.execute();
+            
         } catch (SQLException e) {
             // Log any database errors encountered during save operation
             System.err.println("Failed to save test records: " + e.getMessage());
@@ -280,18 +231,12 @@ public class EntryTestRecordManager {
 
 
 
-    // Load all test records for applicants who have PAID their fees along with their subjects
+    // Load all test records for applicants who have PAID their fees using view
     public ArrayList<EntryTestRecord> loadAllRecords() {
         ArrayList<EntryTestRecord> list = new ArrayList<>();
 
-        // SQL to fetch all test records with INNER JOIN to ApplicationForm table
-        // INNER JOIN ensures only test records with PAID fee status are returned
-        String sql = """
-            SELECT et.Application_Form_ID, et.TestDateTime, et.Passed, et.Score
-            FROM dbo.EntryTestRecord et
-            INNER JOIN dbo.ApplicationForm af ON et.Application_Form_ID = af.application_form_id
-            WHERE af.fee_status = 'PAID'
-        """;
+        // Use view to fetch test records with PAID fee status
+        String sql = "SELECT Application_Form_ID, TestDateTime, Passed, Score FROM dbo.vw_EntryTestRecordsPaid";
 
         // SQL to fetch all subjects for each test record
         String subjectsSql = "SELECT SubjectName FROM dbo.EntryTestSubjects WHERE Application_Form_ID = ?";

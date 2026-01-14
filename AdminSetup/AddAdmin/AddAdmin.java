@@ -3,10 +3,10 @@ import Authentication.AdminLogin;
 import Authentication.Admins;
 import Database.DBConnection;
 
+import java.sql.CallableStatement;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Types;
 
 public class AddAdmin extends AdminLogin {
 
@@ -51,34 +51,28 @@ public class AddAdmin extends AdminLogin {
             return "Database connection not available.";
         }
 
-        // SQL Queries: Check if email exists and insert new admin record
-        // checkQuery: SELECT AdminID from Admin table where Email matches input
-        // (returns 1 record if email exists, 0 if new email)
-        String checkQuery = "SELECT AdminID FROM dbo.Admin WHERE Email = ?";
-        
-        // insertQuery: INSERT new admin with email, password, and super-admin flag
-        // IsSuperAdmin defaults to false for new admins (only super admins can create super admins)
-        String insertQuery = "INSERT INTO dbo.Admin (Email, Password, IsSuperAdmin) VALUES (?, ?, ?)";
-
         try {
-            // Step 1: Check if email already exists to prevent duplicates
-            try (PreparedStatement checkStmt = connection.prepareStatement(checkQuery)) {
+            // Step 1: Check if email already exists using stored procedure sp_CheckAdminEmailExists
+            try (CallableStatement checkStmt = connection.prepareCall("{call sp_CheckAdminEmailExists(?, ?)}")) {
                 checkStmt.setString(1, email);
-                try (ResultSet rs = checkStmt.executeQuery()) {
-                    // If query returns a result, email already exists
-                    if (rs.next()) {
-                        return "email already exists.";
-                    }
+                checkStmt.registerOutParameter(2, Types.BIT);
+                checkStmt.execute();
+                
+                // If output parameter is 1 (true), email already exists
+                if (checkStmt.getBoolean(2)) {
+                    return "email already exists.";
                 }
             }
-            // Step 2: Insert new admin record into database
-            try (PreparedStatement insertStmt = connection.prepareStatement(insertQuery)) {
+            
+            // Step 2: Insert new admin record using stored procedure sp_InsertNewAdmin
+            try (CallableStatement insertStmt = connection.prepareCall("{call sp_InsertNewAdmin(?, ?, ?)}")) {
                 insertStmt.setString(1, email);
                 insertStmt.setString(2, password);
                 // New admins are not super admin by default (security measure)
                 insertStmt.setBoolean(3, false);
-                insertStmt.executeUpdate();
+                insertStmt.execute();
             }
+            
             // Step 3: Refresh in-memory admin list from database
             transferData();
             return "new admin added";

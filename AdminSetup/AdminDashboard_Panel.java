@@ -48,9 +48,9 @@ public class AdminDashboard_Panel extends JFrame {
         menuPanel.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
 
         String[] menuItems = {
-                "View College",
+                "Add College",
                 "View Applicant",
-                "View Program",
+                "Add Program",
                 "Set Test",
                 "Add Admin",
                 "Logout"
@@ -95,9 +95,9 @@ public class AdminDashboard_Panel extends JFrame {
         contentPanel.setLayout(new BorderLayout());
 
         switch (menuItem) {
-            case "View College" -> showColleges();
+            case "Add College" -> showColleges();
             case "View Applicant" -> showApplicants();
-            case "View Program" -> showPrograms();
+            case "Add Program" -> showPrograms();
             case "Set Test" -> showSetTestDatePanel();
             case "Add Admin" -> showAddAdmin();
             case "Logout" -> {
